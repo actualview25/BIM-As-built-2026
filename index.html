@@ -10,21 +10,21 @@
   <div id="bim-info-panel">
     <div id="bim-panel-header">
       <span id="bim-panel-title">معلومات العنصر</span>
-      <button onclick="document.getElementById('bim-info-panel').classList.remove('visible')">✕</button>
+      <button id="closePanel">✕</button>
     </div>
     <div id="bim-panel-content"></div>
   </div>
 
   <div id="sceneList">
-    <button onclick="switchScene('StartPoint')">StartPoint</button>
-    <button onclick="switchScene('Courtyard')">Courtyard</button>
+    <button id="sceneStart">StartPoint</button>
+    <button id="sceneCourtyard">Courtyard</button>
   </div>
 
   <button id="autorotateToggle">🔄 AutoRotate</button>
 
   <div id="container"></div>
 
-  <!-- هنا نحدد type="module" -->
+  <!-- نوع الموديل -->
   <script type="module" src="main.js"></script>
 </body>
 </html>
