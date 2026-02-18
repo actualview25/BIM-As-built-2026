@@ -109,3 +109,104 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+// Renderer
+renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.getElementById('container').appendChild(renderer.domElement);
+
+// إضاءة بسيطة
+const light = new THREE.AmbientLight(0xffffff, 1);
+scene.add(light);
+
+// --- 2. تعريف المشاهد ---
+const scenes = {
+  'StartPoint': {
+    image: 'textures/StartPoint.jpg',
+    hotspots: [
+      { x: 50, y: 0, z: 0, info: 'لوحة كهرباء - StartPoint' }
+    ]
+  },
+  'Courtyard': {
+    image: 'textures/Courtyard.jpg',
+    hotspots: [
+      { x: -30, y: 0, z: 20, info: 'نافورة Courtyard' }
+    ]
+  }
+};
+
+// --- 3. تحميل Panorama ---
+function loadPanorama(path) {
+  const texture = new THREE.TextureLoader().load(path);
+  texture.encoding = THREE.sRGBEncoding; // لتحسين الألوان
+  const geometry = new THREE.SphereGeometry(500, 60, 40);
+  geometry.scale(-1, 1, 1); // عكس السطح ليكون من الداخل
+  const material = new THREE.MeshStandardMaterial({ map: texture });
+  const sphere = new THREE.Mesh(geometry, material);
+  scene.add(sphere);
+  return sphere;
+}
+
+// --- 4. إنشاء Hotspots ---
+function createHotspot(x, y, z, infoText) {
+  const spriteMap = new THREE.TextureLoader().load('img/hotspot.png');
+  const spriteMaterial = new THREE.SpriteMaterial({ map: spriteMap });
+  const hotspot = new THREE.Sprite(spriteMaterial);
+  hotspot.position.set(x, y, z);
+  hotspot.scale.set(10, 10, 1);
+  hotspot.userData = { info: infoText };
+  hotspots.push(hotspot);
+  scene.add(hotspot);
+  return hotspot;
+}
+
+// --- 5. التبديل بين المشاهد ---
+window.switchScene = function(name) {
+  if(currentPanorama) scene.remove(currentPanorama);
+  hotspots.forEach(h => scene.remove(h));
+  hotspots = [];
+
+  const data = scenes[name];
+  currentPanorama = loadPanorama(data.image);
+  data.hotspots.forEach(h => createHotspot(h.x, h.y, h.z, h.info));
+}
+
+// --- 6. Raycaster للنقر على Hotspots ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+function onClick(event) {
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(hotspots);
+  if(intersects.length > 0) {
+    const info = intersects[0].object.userData.info;
+    document.getElementById('bim-panel-content').innerText = info;
+    document.getElementById('bim-info-panel').classList.add('visible');
+  }
+}
+window.addEventListener('click', onClick);
+
+// --- 7. AutoRotate Animation ---
+function animate() {
+  requestAnimationFrame(animate);
+  if(autorotate) camera.rotation.y += 0.001;
+  renderer.render(scene, camera);
+}
+animate();
+
+// --- 8. التحكم بزر AutoRotate ---
+document.getElementById('autorotateToggle').addEventListener('click', () => {
+  autorotate = !autorotate;
+});
+
+// --- 9. تشغيل أول مشهد ---
+switchScene('StartPoint');
+
+// --- 10. تعديل عند تغيير حجم الشاشة ---
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
