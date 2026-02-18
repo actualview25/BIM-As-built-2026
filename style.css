@@ -3,7 +3,6 @@ html, body {
   padding: 0;
   overflow: hidden;
   background: #000;
-  font-family: Arial, sans-serif;
 }
 
 #container {
@@ -11,13 +10,10 @@ html, body {
   height: 100vh;
 }
 
-#ui {
+#toggleRotate {
   position: absolute;
   bottom: 20px;
   left: 20px;
-}
-
-#ui button {
   padding: 8px 14px;
   background: rgba(0,0,0,0.6);
   color: #fff;
