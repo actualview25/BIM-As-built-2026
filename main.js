@@ -1,40 +1,38 @@
 // ====================
 // Imports
 // ====================
-import * as THREE from 'three'; // يستخدم importmap المحلي
+import * as THREE from 'three';
 import { OrbitControls } from './libs/OrbitControls.js';
-
-console.log('✅ Three.js version:', THREE.REVISION);
 
 // ====================
 // Variables
 // ====================
 let scene, camera, renderer, controls;
-let autorotate = true;
 let sphereMesh = null;
+let autorotate = true;
+
+// لكل المسارات الكهربائية
+let electricalPaths = {}; // مثال: { "EL": [ [Vector3, Vector3, ...], "AC": [...] ] }
+let currentPathType = 'EL'; // يمكنك تغييره حسب النوع
+let currentPoints = []; // نقاط المسار الحالي
 
 // ====================
 // Scene
 // ====================
 scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+scene.background = new THREE.Color(0x111122);
 
 // ====================
 // Camera
 // ====================
-camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  2000
-);
+camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
 camera.position.set(0, 0, 0.1);
 
 // ====================
 // Renderer
 // ====================
 renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.getElementById('container').appendChild(renderer.domElement);
@@ -47,66 +45,116 @@ controls.enableZoom = false;
 controls.enablePan = false;
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.autoRotate = autorotate;
-controls.autoRotateSpeed = 0.3;
-controls.target.set(0, 0, 0);
 
 // ====================
-// Panorama Sphere
+// Load Panorama
 // ====================
 const loader = new THREE.TextureLoader();
-loader.load(
-  './textures/StartPoint.jpg', // عدل المسار حسب مجلدك
-  (texture) => {
+loader.load('./textures/StartPoint.jpg', texture => {
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
     const geometry = new THREE.SphereGeometry(500, 64, 64);
-    geometry.scale(-1, 1, 1); // للعرض من الداخل
+    geometry.scale(-1, 1, 1);
 
-    const material = new THREE.MeshBasicMaterial({ map: texture });
+    const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide });
     sphereMesh = new THREE.Mesh(geometry, material);
     scene.add(sphereMesh);
+});
 
-    console.log('✅ Panorama loaded successfully');
-  },
-  (progress) => {
-    console.log(`🔄 Loading: ${Math.round((progress.loaded / progress.total) * 100)}%`);
-  },
-  (error) => {
-    console.error('❌ Error loading panorama:', error);
-  }
-);
+// ====================
+// Raycaster للنقر على الكرة
+// ====================
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+window.addEventListener('click', (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(sphereMesh, true);
+
+    if(intersects.length > 0) {
+        const point = intersects[0].point.clone();
+        console.log('تم تحديد النقطة:', point);
+
+        // إضافة نقطة للمسار الحالي
+        currentPoints.push(point);
+
+        // إنشاء نقطة مرئية
+        createHotspot(point, currentPoints.length);
+
+        // إذا هناك نقطتان أو أكثر، رسم خط
+        if(currentPoints.length >= 2) {
+            drawLine(currentPoints[currentPoints.length-2], currentPoints[currentPoints.length-1], currentPathType);
+        }
+
+        // تحديث المسار في المخزن
+        electricalPaths[currentPathType] = [...currentPoints];
+        console.log('📌 المسار الحالي:', currentPathType, electricalPaths[currentPathType]);
+    }
+});
+
+// ====================
+// رسم نقطة hotspot
+// ====================
+function createHotspot(position, labelNumber) {
+    const geometry = new THREE.SphereGeometry(3, 12, 12);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+    const sphere = new THREE.Mesh(geometry, material);
+    sphere.position.copy(position);
+    sphere.userData.label = `نقطة ${labelNumber}`;
+    scene.add(sphere);
+    return sphere;
+}
+
+// ====================
+// رسم خط بين نقطتين
+// ====================
+function drawLine(start, end, type='EL') {
+    const points = [start, end];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+    // لون الخط حسب نوع المسار
+    let color = 0xffaa00;
+    if(type === 'AC') color = 0x00aaff;
+
+    const material = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+    const line = new THREE.Line(geometry, material);
+    scene.add(line);
+}
+
+// ====================
+// تغيير نوع المسار (مثال EL أو AC)
+function setPathType(type) {
+    currentPathType = type;
+    currentPoints = electricalPaths[type] ? [...electricalPaths[type]] : [];
+    console.log(`🔄 تم التبديل إلى نوع المسار: ${type}`);
+}
 
 // ====================
 // Animation Loop
 // ====================
 function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+
+    if(autorotate) {
+        camera.position.x = 0.1 * Math.sin(Date.now()*0.0006);
+        camera.position.z = 0.1 * Math.cos(Date.now()*0.0006);
+        camera.lookAt(0,0,0);
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
 }
 animate();
 
 // ====================
-// Toggle AutoRotate
+// UI - Toggle AutoRotate
 // ====================
-const btn = document.getElementById('toggleRotate');
-if (btn) {
-  btn.onclick = () => {
+const btnRotate = document.getElementById('toggleRotate');
+btnRotate.onclick = () => {
     autorotate = !autorotate;
-    controls.autoRotate = autorotate;
-    btn.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
-  };
-}
-
-// ====================
-// Resize Handler
-// ====================
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-console.log('🌍 Virtual Tour ready!');
+    btnRotate.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
+};
