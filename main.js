@@ -1,7 +1,7 @@
 // ====================
 // Imports
 // ====================
-import * as THREE from 'three';
+import * as THREE from 'three'; // يستخدم importmap المحلي
 import { OrbitControls } from './libs/OrbitControls.js';
 
 console.log('✅ Three.js version:', THREE.REVISION);
@@ -11,36 +11,33 @@ console.log('✅ Three.js version:', THREE.REVISION);
 // ====================
 let scene, camera, renderer, controls;
 let autorotate = true;
+let sphereMesh = null;
 
 // ====================
 // Scene
 // ====================
 scene = new THREE.Scene();
-scene.background = new THREE.Color(0x222222); // لون فاتح قليلاً للتأكد أن المشهد يعمل
+scene.background = new THREE.Color(0x000000);
 
 // ====================
 // Camera
 // ====================
 camera = new THREE.PerspectiveCamera(
-  90, // زاوية أوسع قليلاً
+  75,
   window.innerWidth / window.innerHeight,
   0.1,
   2000
 );
-camera.position.set(0, 0, 0); // داخل الكرة بالضبط
-
-console.log('📷 Camera position:', camera.position);
+camera.position.set(0, 0, 0.1);
 
 // ====================
 // Renderer
 // ====================
 renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(window.devicePixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-
 document.getElementById('container').appendChild(renderer.domElement);
-console.log('🎨 Renderer created');
 
 // ====================
 // Controls
@@ -50,98 +47,61 @@ controls.enableZoom = false;
 controls.enablePan = false;
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.rotateSpeed = 0.5;
-
-// ====================
-// إضافة كرة اختبارية صغيرة للتأكد أن المشهد يعمل
-// ====================
-function addTestSphere() {
-  const testGeometry = new THREE.SphereGeometry(2, 32, 16);
-  const testMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-  const testSphere = new THREE.Mesh(testGeometry, testMaterial);
-  testSphere.position.set(10, 0, -10); // وضعها أمام الكاميرا
-  scene.add(testSphere);
-  console.log('🔴 تم إضافة كرة اختبار حمراء');
-}
-
-// إضافة كرة اختبار مؤقتاً
-addTestSphere();
+controls.autoRotate = autorotate;
+controls.autoRotateSpeed = 0.3;
+controls.target.set(0, 0, 0);
 
 // ====================
 // Panorama Sphere
 // ====================
 const loader = new THREE.TextureLoader();
-
-// تجربة مسار مختلف للصورة
-const imagePath = './textures/StartPoint.jpg';
-console.log('🔄 محاولة تحميل الصورة من:', imagePath);
-
 loader.load(
-  imagePath,
+  './textures/StartPoint.jpg', // عدل المسار حسب مجلدك
   (texture) => {
-    console.log('✅ تم تحميل الصورة بنجاح!');
-    console.log('📐 أبعاد الصورة:', texture.image.width, 'x', texture.image.height);
-    
     texture.colorSpace = THREE.SRGBColorSpace;
-    
-    // إنشاء الكرة البانورامية
-    const geometry = new THREE.SphereGeometry(100, 64, 64); // تصغير الحجم قليلاً
-    
-    const material = new THREE.MeshBasicMaterial({ 
-      map: texture,
-      side: THREE.BackSide // استخدام BackSide بدلاً من scale(-1,1,1)
-    });
-    
-    const sphere = new THREE.Mesh(geometry, material);
-    sphere.position.set(0, 0, 0); // التأكد من أن الكرة في المركز
-    scene.add(sphere);
-    
-    console.log('🌍 تم إضافة الكرة البانورامية');
-    
-    // إزالة كرة الاختبار بعد نجاح التحميل
-    scene.remove(scene.getObjectById(testSphereId));
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+    const geometry = new THREE.SphereGeometry(500, 64, 64);
+    geometry.scale(-1, 1, 1); // للعرض من الداخل
+
+    const material = new THREE.MeshBasicMaterial({ map: texture });
+    sphereMesh = new THREE.Mesh(geometry, material);
+    scene.add(sphereMesh);
+
+    console.log('✅ Panorama loaded successfully');
   },
   (progress) => {
-    console.log(`📊 التحميل: ${Math.round((progress.loaded / progress.total) * 100)}%`);
+    console.log(`🔄 Loading: ${Math.round((progress.loaded / progress.total) * 100)}%`);
   },
   (error) => {
-    console.error('❌ فشل تحميل الصورة:', error);
-    console.log('⚠️ المسار الذي حاولت:', imagePath);
-    console.log('📍 تأكد من وجود الملف في: textures/StartPoint.jpg');
+    console.error('❌ Error loading panorama:', error);
   }
 );
-
-// حفظ ID كرة الاختبار لإزالتها لاحقاً
-let testSphereId;
 
 // ====================
 // Animation Loop
 // ====================
 function animate() {
   requestAnimationFrame(animate);
-
-  if (autorotate) {
-    camera.rotation.y += 0.001;
-  }
-
   controls.update();
   renderer.render(scene, camera);
 }
 animate();
 
 // ====================
-// UI
+// Toggle AutoRotate
 // ====================
 const btn = document.getElementById('toggleRotate');
 if (btn) {
   btn.onclick = () => {
     autorotate = !autorotate;
-    btn.textContent = autorotate ? '⏸️ AutoRotate' : '▶️ Rotate';
+    controls.autoRotate = autorotate;
+    btn.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
   };
 }
 
 // ====================
-// Resize
+// Resize Handler
 // ====================
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -149,8 +109,4 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// ====================
-// تشخيص إضافي
-// ====================
-console.log('🔍 موقع الملف الحالي:', window.location.pathname);
-console.log('🔍 المسار الكامل للصورة:', new URL(imagePath, window.location.href).href);
+console.log('🌍 Virtual Tour ready!');
