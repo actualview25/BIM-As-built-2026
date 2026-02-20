@@ -69,26 +69,25 @@ function loadPanorama() {
   loader.load(
     './textures/StartPoint.jpg',
     (texture) => {
-      texture.encoding = THREE.sRGBEncoding;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = true;
+      texture.colorSpace = THREE.SRGBColorSpace; // التصحيح الجديد
       texture.wrapS = THREE.RepeatWrapping;
-      texture.repeat.x = -1;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.x = -1; // لعكس الصورة أفقياً إذا لزم
 
-      const geometry = new THREE.SphereGeometry(500, 128, 128); // segments مضاعفة
+      const geometry = new THREE.SphereGeometry(500, 128, 128);
       const material = new THREE.MeshBasicMaterial({
         map: texture,
-        side: THREE.BackSide
+        side: THREE.BackSide // الكاميرا داخل الكرة
       });
 
+      if (sphereMesh) scene.remove(sphereMesh);
       sphereMesh = new THREE.Mesh(geometry, material);
       scene.add(sphereMesh);
 
       console.log('✅ Panorama Loaded');
     },
     undefined,
-    (err) => console.error(err)
+    (err) => console.error('❌ خطأ تحميل البانوراما:', err)
   );
 }
 
@@ -109,8 +108,6 @@ markerPreview.visible = false;
 // النقر على الكرة لإضافة نقطة
 function onClick(e) {
   if (!drawMode || !sphereMesh) return;
-
-  // تجاهل أي نقر خارج canvas
   if (e.target !== renderer.domElement) return;
 
   mouse.x = (e.clientX / renderer.domElement.clientWidth) * 2 - 1;
@@ -126,16 +123,8 @@ function onClick(e) {
 
 // تحديث موقع مؤشر الماوس قبل النقر
 function onMouseMove(e) {
-  if (!drawMode || !sphereMesh) {
-    markerPreview.visible = false;
-    return;
-  }
-
-  // تجاهل أي مؤشر خارج الـ canvas
-  if (e.target !== renderer.domElement) {
-    markerPreview.visible = false;
-    return;
-  }
+  if (!drawMode || !sphereMesh) { markerPreview.visible = false; return; }
+  if (e.target !== renderer.domElement) { markerPreview.visible = false; return; }
 
   mouse.x = (e.clientX / renderer.domElement.clientWidth) * 2 - 1;
   mouse.y = -(e.clientY / renderer.domElement.clientHeight) * 2 + 1;
@@ -146,9 +135,7 @@ function onMouseMove(e) {
   if (hits.length) {
     markerPreview.position.copy(hits[0].point);
     markerPreview.visible = true;
-  } else {
-    markerPreview.visible = false;
-  }
+  } else markerPreview.visible = false;
 }
 
 // =======================================
@@ -177,7 +164,6 @@ function updateTempLine() {
     tempLine.geometry.dispose();
     tempLine = null;
   }
-
   if (selectedPoints.length < 2) return;
 
   const g = new THREE.BufferGeometry().setFromPoints(selectedPoints);
@@ -241,7 +227,7 @@ function onKeyDown(e) {
 }
 
 // =======================================
-// إعداد الأحداث
+// إعداد الأحداث + زر Finalize
 // =======================================
 function setupEvents() {
   renderer.domElement.addEventListener('click', onClick);
@@ -258,13 +244,26 @@ function setupEvents() {
     drawMode = !drawMode;
     document.body.style.cursor = drawMode ? 'crosshair' : 'default';
     markerPreview.visible = drawMode;
-
-    // السماح بالدوران دائمًا
     controls.enableRotate = true;
     controls.autoRotate = autorotate;
-
-    if (!drawMode) clearCurrentDrawing();
   };
+
+  // زر تثبيت المسار
+  const finalizeBtn = document.createElement('button');
+  finalizeBtn.textContent = '💾 تثبيت المسار';
+  finalizeBtn.style.position = 'absolute';
+  finalizeBtn.style.bottom = '25px';
+  finalizeBtn.style.left = '400px';
+  finalizeBtn.style.padding = '12px 24px';
+  finalizeBtn.style.zIndex = '100';
+  finalizeBtn.style.borderRadius = '40px';
+  finalizeBtn.style.background = '#228822';
+  finalizeBtn.style.color = 'white';
+  finalizeBtn.style.fontWeight = 'bold';
+  finalizeBtn.style.cursor = 'pointer';
+  document.body.appendChild(finalizeBtn);
+
+  finalizeBtn.onclick = () => saveCurrentPath();
 }
 
 // =======================================
