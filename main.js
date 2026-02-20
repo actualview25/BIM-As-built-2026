@@ -11,237 +11,127 @@ let drawMode = false;
 let sphereMesh = null;
 let selectedPoints = [];
 let previewLine = null;
-let markers = [];
 let pipes = [];
+let markers = []; // للعلامات
 
-// ألوان المسارات
-const pathColors = {
-  EL: 0xffaa00, // ذهبي
-  AC: 0x00ccff, // أزرق فاتح
-  WP: 0x0066cc, // أزرق غامق
-  WA: 0xff3300, // أحمر
-  GS: 0x33cc33  // أخضر
+// ألوان الأنظمة - أكثر إشراقاً
+const pipeColors = {
+  EL: 0xffcc00,
+  AC: 0x00ccff,
+  WP: 0x0066cc,
+  WA: 0xff3300,
+  GS: 0x33cc33
 };
 
-let currentPathType = 'EL';
+let currentPipeType = 'EL';
 
-// ==================== تهيئة المشهد ====================
-function init() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050510); // خلفية داكنة
+// ==================== Scene ====================
+scene = new THREE.Scene();
+scene.background = null; // الحفاظ على الشفافية
 
-  // ===== الإضاءة =====
-  // إضاءة محيطة
-  const ambientLight = new THREE.AmbientLight(0x404060);
-  scene.add(ambientLight);
+// ==================== Lights ====================
+// إضاءة محيطة أقوى
+scene.add(new THREE.AmbientLight(0xffffff, 1.2));
 
-  // إضاءة اتجاهية رئيسية
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-  dirLight.position.set(1, 1, 1);
-  scene.add(dirLight);
+// إضاءة اتجاهية رئيسية
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(10, 10, 10);
+scene.add(dirLight);
 
-  // إضاءة خلفية
-  const backLight = new THREE.DirectionalLight(0x446688, 0.5);
-  backLight.position.set(-1, 0, -1);
-  scene.add(backLight);
+// إضاءة إضافية من الخلف
+const backLight = new THREE.DirectionalLight(0x88aaff, 0.8);
+backLight.position.set(-10, -5, -10);
+scene.add(backLight);
 
-  // ===== الكاميرا =====
-  camera = new THREE.PerspectiveCamera(
-    75,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    2000
-  );
-  camera.position.set(0, 0, 0.1); // داخل الكرة
+// إضاءة من الأسفل
+const bottomLight = new THREE.PointLight(0x446688, 0.5);
+bottomLight.position.set(0, -20, 0);
+scene.add(bottomLight);
 
-  // ===== Renderer =====
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x050510); // لون الخلفية
+// ==================== Camera ====================
+camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  2000
+);
+camera.position.set(0, 0, 0.1); // نبقى داخل الكرة
 
-  document.getElementById('container').appendChild(renderer.domElement);
+// ==================== Renderer ====================
+renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  // ===== التحكم =====
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableZoom = true;
-  controls.enablePan = false;
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.rotateSpeed = 0.5;
-  controls.autoRotate = false;
+document.getElementById('container').appendChild(renderer.domElement);
 
-  // ===== تحميل الصورة البانورامية =====
-  loadPanorama();
+// ==================== Controls ====================
+controls = new OrbitControls(camera, renderer.domElement);
+controls.enableZoom = true; // تفعيل الزوم مهم للرؤية
+controls.enablePan = false;
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.rotateSpeed = 0.5;
 
-  // ===== إضافة عناصر المساعدة =====
-  addHelpers();
+// ==================== Panorama ====================
+const loader = new THREE.TextureLoader();
+loader.load('./textures/StartPoint.jpg', texture => {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  // تحسين جودة النسيج
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
 
-  // ===== إعداد الأحداث =====
-  setupEventListeners();
+  const geo = new THREE.SphereGeometry(500, 64, 64);
+  geo.scale(-1, 1, 1);
 
-  // ===== بدء الرسم =====
-  animate();
-}
-
-// ===== تحميل الصورة البانورامية =====
-function loadPanorama() {
-  const loader = new THREE.TextureLoader();
-  
-  // استخدام صورة افتراضية إذا لم توجد الصورة المطلوبة
-  loader.load(
-    './textures/StartPoint.jpg',
-    (texture) => {
-      console.log('✅ تم تحميل الصورة بنجاح');
-      
-      // ضبط إعدادات النسيج
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      
-      // إنشاء كرة بانوراما
-      const geometry = new THREE.SphereGeometry(500, 64, 64);
-      geometry.scale(-1, 1, 1); // لعكس الكرة للداخل
-      
-      const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        side: THREE.BackSide // مهم جداً للرؤية من الداخل
-      });
-      
-      sphereMesh = new THREE.Mesh(geometry, material);
-      scene.add(sphereMesh);
-      
-      console.log('✅ تم إنشاء المشهد البانورامي');
-      
-      // إضافة مسار تجريبي
-      addDemoPath();
-    },
-    (progress) => {
-      console.log('⏳ جاري التحميل:', (progress.loaded / progress.total * 100) + '%');
-    },
-    (error) => {
-      console.error('❌ فشل تحميل الصورة:', error);
-      createColoredSphere();
-    }
-  );
-}
-
-// ===== إنشاء كرة ملونة للاختبار =====
-function createColoredSphere() {
-  console.log('⚪ إنشاء كرة ملونة للاختبار');
-  
-  const geometry = new THREE.SphereGeometry(500, 64, 64);
-  geometry.scale(-1, 1, 1);
-  
-  // إنشاء نسيج ملون
-  const canvas = document.createElement('canvas');
-  canvas.width = 2048;
-  canvas.height = 1024;
-  const ctx = canvas.getContext('2d');
-  
-  // رسم خلفية متدرجة
-  const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
-  gradient.addColorStop(0, '#223344');
-  gradient.addColorStop(0.5, '#445566');
-  gradient.addColorStop(1, '#667788');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  
-  // رسم شبكة
-  ctx.strokeStyle = '#88aaff';
-  ctx.lineWidth = 4;
-  for (let i = 0; i <= 16; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i * (canvas.width/16), 0);
-    ctx.lineTo(i * (canvas.width/16), canvas.height);
-    ctx.stroke();
-  }
-  for (let i = 0; i <= 8; i++) {
-    ctx.beginPath();
-    ctx.moveTo(0, i * (canvas.height/8));
-    ctx.lineTo(canvas.width, i * (canvas.height/8));
-    ctx.stroke();
-  }
-  
-  // رسم نص
-  ctx.font = 'bold 80px Arial';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('BIM Virtual Tour', 400, 500);
-  
-  const texture = new THREE.CanvasTexture(canvas);
-  
-  const material = new THREE.MeshBasicMaterial({
+  const mat = new THREE.MeshBasicMaterial({ 
     map: texture,
-    side: THREE.BackSide
+    side: THREE.BackSide // تأكيد الرؤية من الداخل
   });
   
-  sphereMesh = new THREE.Mesh(geometry, material);
+  sphereMesh = new THREE.Mesh(geo, mat);
   scene.add(sphereMesh);
-}
 
-// ===== إضافة مسار تجريبي =====
+  console.log('✅ Panorama loaded');
+  
+  // إضافة مسار تجريبي بعد تحميل الصورة
+  setTimeout(addDemoPath, 2000);
+}, undefined, (error) => {
+  console.error('❌ خطأ في تحميل الصورة:', error);
+});
+
+// ==================== إضافة مسار تجريبي ====================
 function addDemoPath() {
-  setTimeout(() => {
-    // إنشاء مسار حلزوني
-    const points = [];
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 4) * Math.PI;
-      const radius = 300;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle * 2) * 100;
-      const z = Math.sin(angle) * radius;
-      
-      // تحويل النقطة إلى سطح الكرة
-      const point = new THREE.Vector3(x, y, z).normalize().multiplyScalar(480);
-      points.push(point);
-    }
+  // إنشاء مسار حلزوني جميل
+  const points = [];
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 4) * Math.PI;
+    const radius = 350;
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle * 3) * 150;
+    const z = Math.sin(angle) * radius;
     
-    selectedPoints = points;
-    createPath('EL');
-    console.log('✅ تم إنشاء مسار تجريبي');
-  }, 2000);
+    // تحويل النقطة إلى سطح الكرة
+    const point = new THREE.Vector3(x, y, z).normalize().multiplyScalar(480);
+    points.push(point);
+  }
+  
+  selectedPoints = points;
+  
+  // إضافة علامات للنقاط
+  points.forEach(point => addMarker(point));
+  
+  // رسم خط المعاينة
+  drawPreview();
+  
+  console.log('✅ مسار تجريبي تم إنشاؤه');
 }
 
-// ===== إضافة عناصر المساعدة =====
-function addHelpers() {
-  // إضافة نقاط مرجعية
-  const dotGeometry = new THREE.SphereGeometry(5, 16, 16);
-  
-  // نقاط الاتجاهات الرئيسية
-  const directions = [
-    { pos: [500, 0, 0], color: 0xff3333 }, // يمين
-    { pos: [-500, 0, 0], color: 0x33ff33 }, // يسار
-    { pos: [0, 500, 0], color: 0x3333ff }, // فوق
-    { pos: [0, -500, 0], color: 0xffff33 }, // تحت
-    { pos: [0, 0, 500], color: 0xff33ff }, // أمام
-    { pos: [0, 0, -500], color: 0x33ffff } // خلف
-  ];
-  
-  directions.forEach(dir => {
-    const material = new THREE.MeshStandardMaterial({ color: dir.color, emissive: dir.color });
-    const dot = new THREE.Mesh(dotGeometry, material);
-    dot.position.set(dir.pos[0], dir.pos[1], dir.pos[2]);
-    scene.add(dot);
-  });
-}
-
-// ===== إعداد الأحداث =====
-function setupEventListeners() {
-  window.addEventListener('click', onClick);
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('resize', onResize);
-  
-  document.getElementById('toggleRotate').onclick = toggleRotate;
-  document.getElementById('toggleDraw').onclick = toggleDraw;
-}
-
-// ===== معالج النقر =====
+// ==================== Raycaster ====================
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-function onClick(e) {
+window.addEventListener('click', e => {
   if (!sphereMesh || !drawMode) return;
 
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
@@ -254,23 +144,24 @@ function onClick(e) {
     const point = hits[0].point.clone();
     selectedPoints.push(point);
     
-    // إضافة علامة
+    // إضافة علامة مرئية
     addMarker(point);
     
-    // تحديث خط المعاينة
-    updatePreview();
-    
-    console.log(`📍 نقطة ${selectedPoints.length}:`, point);
+    drawPreview();
+    console.log('📍 نقطة مضافة:', point);
   }
-}
+});
 
-// ===== إضافة علامة =====
+// ==================== إضافة علامة ====================
 function addMarker(position) {
+  // إنشاء كرة صغيرة في موقع النقطة
   const geometry = new THREE.SphereGeometry(8, 16, 16);
   const material = new THREE.MeshStandardMaterial({
-    color: pathColors[currentPathType],
-    emissive: pathColors[currentPathType],
-    emissiveIntensity: 0.5
+    color: pipeColors[currentPipeType],
+    emissive: pipeColors[currentPipeType],
+    emissiveIntensity: 0.5,
+    roughness: 0.3,
+    metalness: 0.1
   });
   
   const marker = new THREE.Mesh(geometry, material);
@@ -279,28 +170,32 @@ function addMarker(position) {
   markers.push(marker);
 }
 
-// ===== تحديث خط المعاينة =====
-function updatePreview() {
+// ==================== Preview ====================
+function drawPreview() {
   if (previewLine) {
     scene.remove(previewLine);
     previewLine.geometry.dispose();
   }
-  
-  if (selectedPoints.length >= 2) {
-    const geometry = new THREE.BufferGeometry().setFromPoints(selectedPoints);
-    const material = new THREE.LineBasicMaterial({ 
-      color: pathColors[currentPathType],
-      linewidth: 2
-    });
-    previewLine = new THREE.Line(geometry, material);
-    scene.add(previewLine);
-  }
+
+  if (selectedPoints.length < 2) return;
+
+  // خط معاينة أكثر وضوحاً
+  const geo = new THREE.BufferGeometry().setFromPoints(selectedPoints);
+  const mat = new THREE.LineBasicMaterial({ 
+    color: pipeColors[currentPipeType],
+    linewidth: 2 // ملاحظة: linewidth غير مدعوم في كل المتصفحات
+  });
+  previewLine = new THREE.Line(geo, mat);
+  scene.add(previewLine);
 }
 
-// ===== إنشاء المسار النهائي =====
-function createPath(type = currentPathType) {
-  if (selectedPoints.length < 2) return;
-  
+// ==================== Final Pipe ====================
+function finalizePipe() {
+  if (selectedPoints.length < 2) {
+    alert('⚠️ الرجاء إضافة نقطتين على الأقل');
+    return;
+  }
+
   // حذف خط المعاينة
   if (previewLine) {
     scene.remove(previewLine);
@@ -311,32 +206,33 @@ function createPath(type = currentPathType) {
   // حذف العلامات
   markers.forEach(marker => scene.remove(marker));
   markers = [];
-  
+
   try {
-    // إنشاء منحنى ناعم
+    // إنشاء المسار
     const curve = new THREE.CatmullRomCurve3(selectedPoints);
     
-    // إنشاء أنبوب
-    const tubeGeometry = new THREE.TubeGeometry(curve, 100, 4, 8, false);
-    const material = new THREE.MeshStandardMaterial({
-      color: pathColors[type],
-      emissive: pathColors[type],
+    // زيادة سمك الأنبوب ليكون مرئياً بشكل أفضل
+    const geo = new THREE.TubeGeometry(curve, 100, 4, 12, false);
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: pipeColors[currentPipeType],
+      emissive: pipeColors[currentPipeType],
       emissiveIntensity: 0.3,
       roughness: 0.3,
-      metalness: 0.4,
+      metalness: 0.2,
       transparent: true,
       opacity: 0.9
     });
+
+    const pipe = new THREE.Mesh(geo, mat);
+    pipe.userData.type = currentPipeType;
+    pipes.push(pipe);
+    scene.add(pipe);
     
-    const path = new THREE.Mesh(tubeGeometry, material);
-    path.userData.type = type;
-    pipes.push(path);
-    scene.add(path);
-    
-    // إضافة نقاط مضيئة عند البداية والنهاية
-    addEndpoints(selectedPoints[0], selectedPoints[selectedPoints.length - 1], type);
-    
-    console.log(`✅ تم إنشاء مسار ${type} بنجاح`);
+    // إضافة نقاط مضيئة في البداية والنهاية
+    addEndpoints(selectedPoints[0], selectedPoints[selectedPoints.length - 1]);
+
+    console.log('✅ تم إنشاء مسار جديد بنجاح');
     selectedPoints = [];
     
   } catch (error) {
@@ -344,12 +240,12 @@ function createPath(type = currentPathType) {
   }
 }
 
-// ===== إضافة نقاط البداية والنهاية =====
-function addEndpoints(start, end, type) {
+// ==================== إضافة نقاط البداية والنهاية ====================
+function addEndpoints(start, end) {
   const geometry = new THREE.SphereGeometry(12, 24, 24);
   const material = new THREE.MeshStandardMaterial({
-    color: pathColors[type],
-    emissive: pathColors[type],
+    color: pipeColors[currentPipeType],
+    emissive: pipeColors[currentPipeType],
     emissiveIntensity: 0.8
   });
   
@@ -361,92 +257,81 @@ function addEndpoints(start, end, type) {
   endPoint.position.copy(end);
   scene.add(endPoint);
   
-  // إضافة وهج خفيف
+  // إزالة النقاط بعد ثانيتين
   setTimeout(() => {
     scene.remove(startPoint);
     scene.remove(endPoint);
   }, 2000);
 }
 
-// ===== التراجع =====
+// ==================== Undo ====================
 function undoLast() {
   if (selectedPoints.length > 0) {
     selectedPoints.pop();
     
+    // حذف آخر علامة
     if (markers.length > 0) {
       const lastMarker = markers.pop();
       scene.remove(lastMarker);
     }
     
-    updatePreview();
+    drawPreview();
     console.log('⏪ تم التراجع');
   }
 }
 
-// ===== معالج المفاتيح =====
-function onKeyDown(e) {
+window.addEventListener('keydown', e => {
   if (e.key === 'Backspace') {
     e.preventDefault();
     undoLast();
   }
   if (e.key === 'Enter') {
     e.preventDefault();
-    createPath();
+    finalizePipe();
   }
-  if (e.key === 'Escape') {
-    e.preventDefault();
-    // إلغاء الرسم
-    selectedPoints = [];
-    markers.forEach(marker => scene.remove(marker));
-    markers = [];
-    if (previewLine) {
-      scene.remove(previewLine);
-      previewLine.geometry.dispose();
-      previewLine = null;
-    }
-  }
-}
+  // مفاتيح لتغيير نوع المسار
+  if (e.key === '1') currentPipeType = 'EL';
+  if (e.key === '2') currentPipeType = 'AC';
+  if (e.key === '3') currentPipeType = 'WP';
+  if (e.key === '4') currentPipeType = 'WA';
+  if (e.key === '5') currentPipeType = 'GS';
+});
 
-// ===== وظائف التحكم =====
-function toggleRotate() {
+// ==================== UI ====================
+document.getElementById('toggleRotate').onclick = () => {
   autorotate = !autorotate;
   const btn = document.getElementById('toggleRotate');
   btn.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
-  btn.style.background = autorotate ? 'rgba(40, 60, 80, 0.95)' : 'rgba(20, 30, 40, 0.9)';
-}
+};
 
-function toggleDraw() {
+document.getElementById('toggleDraw').onclick = e => {
   drawMode = !drawMode;
-  const btn = document.getElementById('toggleDraw');
-  btn.textContent = drawMode ? '⛔ إيقاف الرسم' : '✏️ تفعيل الرسم';
-  btn.style.background = drawMode ? '#aa3333' : 'rgba(20, 30, 40, 0.9)';
+  e.target.textContent = drawMode ? '⛔ إيقاف الرسم' : '✏️ تفعيل الرسم';
+  e.target.style.background = drawMode ? '#aa3333' : 'rgba(20, 30, 40, 0.8)';
   document.body.style.cursor = drawMode ? 'crosshair' : 'default';
-  console.log('🎨 وضع الرسم:', drawMode ? 'مفعل' : 'معطل');
-}
+};
 
-// ===== تغيير الحجم =====
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// ===== حلقة الرسوم المتحركة =====
+// ==================== Animation ====================
 function animate() {
   requestAnimationFrame(animate);
-  
-  if (autorotate && sphereMesh) {
-    // تدوير بطيء
-    const time = Date.now() * 0.0002;
+
+  if (autorotate) {
+    // تدوير بطيء حول المحور Y
+    const time = Date.now() * 0.0004;
     camera.position.x = 0.1 * Math.sin(time);
     camera.position.z = 0.1 * Math.cos(time);
-    camera.position.y = 0;
+    camera.position.y = 0.05 * Math.sin(time * 0.5);
     camera.lookAt(0, 0, 0);
   }
-  
+
   controls.update();
   renderer.render(scene, camera);
 }
+animate();
 
-// ===== تشغيل التطبيق =====
-init();
+// ==================== Resize ====================
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
