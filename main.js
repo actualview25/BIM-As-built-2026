@@ -11,6 +11,8 @@ let selectedPoints = [];
 let previewLine = null;
 let pipes = [];
 let drawMode = false; // للتحكم في وضع الرسم
+
+// ألوان الأنابيب حسب النوع
 const pipeColors = {
   EL: 0xffcc00,
   AC: 0x00ccff,
@@ -18,8 +20,9 @@ const pipeColors = {
   WA: 0xff3300,
   GS: 0x33cc33
 };
-let drawMode = false; // افتراضياً لا نرسم
-let currentPipeType = { radius: 0.6, color: 0xffcc00 };
+
+// نوع الأنبوب الحالي (افتراضيًا EL)
+let currentPipeType = { radius: 0.6, color: pipeColors.EL };
 
 // ==================== Scene ====================
 scene = new THREE.Scene();
@@ -32,12 +35,7 @@ dirLight.position.set(10, 10, 10);
 scene.add(dirLight);
 
 // ==================== Camera ====================
-camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  2000
-);
+camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
 camera.position.set(0, 0, 0.1);
 
 // ==================== Renderer ====================
@@ -57,21 +55,25 @@ controls.rotateSpeed = 0.5;
 
 // ==================== Load Panorama ====================
 const loader = new THREE.TextureLoader();
-loader.load('./textures/StartPoint.jpg', texture => {
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+loader.load(
+  './textures/StartPoint.jpg',
+  texture => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-  const geometry = new THREE.SphereGeometry(500, 64, 64);
-  geometry.scale(-1, 1, 1);
+    const geometry = new THREE.SphereGeometry(500, 64, 64);
+    geometry.scale(-1, 1, 1);
+    const material = new THREE.MeshBasicMaterial({ map: texture });
+    sphereMesh = new THREE.Mesh(geometry, material);
+    scene.add(sphereMesh);
 
-  const material = new THREE.MeshBasicMaterial({ map: texture });
-  sphereMesh = new THREE.Mesh(geometry, material);
-  scene.add(sphereMesh);
-
-  console.log('✅ Panorama loaded');
-}, undefined, err => {
-  console.error('❌ Failed to load panorama', err);
-});
+    console.log('✅ Panorama loaded');
+  },
+  undefined,
+  err => {
+    console.error('❌ Failed to load panorama', err);
+  }
+);
 
 // ==================== Raycaster ====================
 const raycaster = new THREE.Raycaster();
@@ -124,6 +126,10 @@ function finalizePipe() {
     previewLine = null;
   }
 
+  // تحديث اللون حسب القائمة
+  const selectedType = document.getElementById('pipeType').value;
+  currentPipeType.color = pipeColors[selectedType];
+
   const curve = new THREE.CatmullRomCurve3(selectedPoints);
   const geometry = new THREE.TubeGeometry(curve, 64, currentPipeType.radius, 12, false);
 
@@ -134,10 +140,11 @@ function finalizePipe() {
   });
 
   const pipe = new THREE.Mesh(geometry, material);
+  pipe.userData.type = selectedType; // لتتبع النوع
   pipes.push(pipe);
   scene.add(pipe);
 
-  console.log('✅ Pipe created');
+  console.log(`✅ Pipe created of type ${selectedType}`);
 
   selectedPoints = [];
 }
@@ -165,6 +172,21 @@ window.addEventListener('keydown', e => {
   if (e.key === 'Enter') finalizePipe();
 });
 
+// ==================== UI ====================
+const btnRotate = document.getElementById('toggleRotate');
+btnRotate.onclick = () => {
+  autorotate = !autorotate;
+  btnRotate.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
+};
+
+// زر تفعيل الرسم + قائمة اختيار النوع
+const btnDraw = document.getElementById('toggleDraw');
+btnDraw.onclick = () => {
+  drawMode = !drawMode;
+  btnDraw.textContent = drawMode ? '⛔ إيقاف الرسم' : '✏️ تفعيل الرسم';
+  btnDraw.style.backgroundColor = drawMode ? 'rgba(200,50,50,0.8)' : 'rgba(0,120,200,0.8)';
+};
+
 // ==================== Animation ====================
 function animate() {
   requestAnimationFrame(animate);
@@ -179,20 +201,6 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
-
-// ==================== UI ====================
-const btnRotate = document.getElementById('toggleRotate');
-btnRotate.onclick = () => {
-  autorotate = !autorotate;
-  btnRotate.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
-};
-
-const btnDraw = document.getElementById('toggleDraw');
-btnDraw.onclick = () => {
-  drawMode = !drawMode;
-  btnDraw.textContent = drawMode ? '⛔ إيقاف الرسم' : '✏️ تفعيل الرسم';
-  btnDraw.style.backgroundColor = drawMode ? 'rgba(200,50,50,0.8)' : 'rgba(0,120,200,0.8)';
-};
 
 // ==================== Resize ====================
 window.addEventListener('resize', () => {
