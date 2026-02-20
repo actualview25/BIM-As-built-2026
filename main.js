@@ -22,6 +22,7 @@ const pathColors = {
 let currentPathType = 'EL';
 window.setCurrentPathType = (t) => currentPathType = t;
 
+// ==================== Init ====================
 init();
 
 function init() {
@@ -33,11 +34,11 @@ function init() {
     0.1,
     2000
   );
-  camera.position.set(0, 0, 0.1);
+  camera.position.set(0,0,0);
 
   renderer = new THREE.WebGLRenderer({
     antialias: true,
-    alpha: true   // ✅ يمنع الوميض الأسود
+    alpha: true
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -47,28 +48,28 @@ function init() {
   controls.enableZoom = true;
   controls.enablePan = false;
   controls.enableDamping = true;
+  controls.autoRotate = autorotate;
+  controls.autoRotateSpeed = 0.2; // بطئ جدًا للتدوير السلس
 
-  const light = new THREE.AmbientLight(0xffffff, 1.2);
-  scene.add(light);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+  scene.add(ambientLight);
 
   loadPanorama();
   setupEvents();
   animate();
 }
 
+// ==================== Load Panorama ====================
 function loadPanorama() {
   const loader = new THREE.TextureLoader();
-
   loader.load(
     './textures/StartPoint.jpg',
     (texture) => {
-
+      texture.encoding = THREE.sRGBEncoding; // ⚡ تصحيح الألوان
       texture.wrapS = THREE.RepeatWrapping;
       texture.repeat.x = -1;
 
       const geometry = new THREE.SphereGeometry(500, 64, 64);
-
-      // ✅ الإصلاح الحقيقي
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         side: THREE.BackSide
@@ -85,8 +86,7 @@ function loadPanorama() {
   );
 }
 
-/* ================== الرسم ================== */
-
+// ==================== Drawing ====================
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
@@ -105,10 +105,12 @@ function onClick(e) {
 function addPoint(pos) {
   selectedPoints.push(pos.clone());
 
-  const g = new THREE.SphereGeometry(6, 12, 12);
+  const markerRadius = 5; // مناسب لنصف قطر 500
+  const g = new THREE.SphereGeometry(markerRadius, 12, 12);
   const m = new THREE.MeshStandardMaterial({
     color: pathColors[currentPathType],
-    emissive: pathColors[currentPathType]
+    emissive: pathColors[currentPathType],
+    emissiveIntensity: 0.5
   });
 
   const marker = new THREE.Mesh(g, m);
@@ -120,43 +122,61 @@ function addPoint(pos) {
 }
 
 function updateTempLine() {
-  if (tempLine) scene.remove(tempLine);
+  if (tempLine) {
+    scene.remove(tempLine);
+    tempLine.geometry.dispose();
+    tempLine = null;
+  }
 
   if (selectedPoints.length < 2) return;
 
   const g = new THREE.BufferGeometry().setFromPoints(selectedPoints);
   const m = new THREE.LineBasicMaterial({
-    color: pathColors[currentPathType]
+    color: pathColors[currentPathType],
+    linewidth: 2
   });
 
   tempLine = new THREE.Line(g, m);
   scene.add(tempLine);
 }
 
+// ==================== Events ====================
 function setupEvents() {
   window.addEventListener('click', onClick);
   window.addEventListener('resize', onResize);
 
-  document.getElementById('toggleRotate').onclick = () => autorotate = !autorotate;
-  document.getElementById('toggleDraw').onclick = () => drawMode = !drawMode;
+  document.getElementById('toggleRotate').onclick = () => {
+    autorotate = !autorotate;
+    controls.autoRotate = autorotate;
+  };
+
+  document.getElementById('toggleDraw').onclick = () => {
+    drawMode = !drawMode;
+    document.body.style.cursor = drawMode ? 'crosshair' : 'default';
+    if (!drawMode) clearDrawing();
+  };
+}
+
+function clearDrawing() {
+  selectedPoints = [];
+  pointMarkers.forEach(m=>scene.remove(m));
+  pointMarkers = [];
+  if (tempLine) {
+    scene.remove(tempLine);
+    tempLine.geometry.dispose();
+    tempLine = null;
+  }
 }
 
 function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+// ==================== Animate ====================
 function animate() {
   requestAnimationFrame(animate);
-
-  if (autorotate) {
-    const t = Date.now() * 0.0003;
-    camera.position.x = 0.1 * Math.sin(t);
-    camera.position.z = 0.1 * Math.cos(t);
-    camera.lookAt(0, 0, 0);
-  }
-
   controls.update();
   renderer.render(scene, camera);
 }
