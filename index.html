@@ -2,35 +2,31 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8">
-  <title>جولة افتراضية - Virtual Tour</title>
+  <title>Virtual Tour BIM</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <link rel="stylesheet" href="style.css">
+
+  <!-- أيقونة -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌍</text></svg>">
 </head>
+
 <body>
+
   <div id="container"></div>
 
   <!-- أزرار التحكم -->
-  <div class="controls">
-    <button id="toggleRotate">⏸️ إيقاف التدوير</button>
-    <button id="toggleDraw">✏️ تفعيل الرسم</button>
+  <button id="toggleRotate">⏸️ إيقاف التدوير</button>
+  <button id="toggleDraw">✏️ تفعيل الرسم</button>
 
-    <select id="pipeType">
-      <option value="EL">EL</option>
-      <option value="AC">AC</option>
-      <option value="WP">WP</option>
-      <option value="WA">WA</option>
-      <option value="GS">GS</option>
-    </select>
-  </div>
-
-  <div id="hint" class="hint">
+  <div class="hint">
     🖱 Click: إضافة نقطة<br>
     ⌫ Backspace: حذف آخر نقطة<br>
     ⏎ Enter: اعتماد المسار
   </div>
 
-  <!-- ملف JS -->
+  <!-- مهم جدًا: type="module" -->
   <script type="module" src="./main.js"></script>
+
 </body>
 </html>
