@@ -6,42 +6,23 @@ console.log('✅ Three.js version:', THREE.REVISION);
 // ==================== Variables ====================
 let scene, camera, renderer, controls;
 let autorotate = true;
-
 let sphereMesh = null;
 let selectedPoints = [];
 let previewLine = null;
 let pipes = [];
-let drawMode = false; // ⛔ افتراضياً لا نرسم
-// نوع الأنبوب الحالي (يمكنك تغييره لاحقًا بحرية)
-let currentPipeType = {
-  radius: 0.6,
-  color: 0xffcc00
-};
+let drawMode = false; // افتراضياً لا نرسم
+let currentPipeType = { radius: 0.6, color: 0xffcc00 };
 
 // ==================== Scene ====================
 scene = new THREE.Scene();
-scene.background = null; // مهم جدًا لمنع الشاشة السوداء
+scene.background = null; // لتجنب الشاشة السوداء
 
-// ==================== Lighting (ضروري للأنابيب) ====================
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
-scene.add(ambientLight);
-
+// ==================== Lights ====================
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
 dirLight.position.set(10, 10, 10);
 scene.add(dirLight);
-const drawBtn = document.getElementById('drawToggle');
 
-drawBtn.onclick = () => {
-  drawMode = !drawMode;
-
-  drawBtn.textContent = drawMode
-    ? '⛔ إيقاف الرسم'
-    : '✏️ بدء الرسم';
-
-  drawBtn.style.backgroundColor = drawMode
-    ? 'rgba(200,50,50,0.8)'
-    : 'rgba(0,120,200,0.8)';
-};
 // ==================== Camera ====================
 camera = new THREE.PerspectiveCamera(
   75,
@@ -52,10 +33,7 @@ camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 0, 0.1);
 
 // ==================== Renderer ====================
-renderer = new THREE.WebGLRenderer({
-  antialias: true,
-  alpha: true
-});
+renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -71,36 +49,28 @@ controls.rotateSpeed = 0.5;
 
 // ==================== Load Panorama ====================
 const loader = new THREE.TextureLoader();
-loader.load(
-  './textures/StartPoint.jpg',
-  texture => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+loader.load('./textures/StartPoint.jpg', texture => {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
-    const geometry = new THREE.SphereGeometry(500, 64, 64);
-    geometry.scale(-1, 1, 1);
+  const geometry = new THREE.SphereGeometry(500, 64, 64);
+  geometry.scale(-1, 1, 1);
 
-    const material = new THREE.MeshBasicMaterial({ map: texture });
-    sphereMesh = new THREE.Mesh(geometry, material);
-    scene.add(sphereMesh);
+  const material = new THREE.MeshBasicMaterial({ map: texture });
+  sphereMesh = new THREE.Mesh(geometry, material);
+  scene.add(sphereMesh);
 
-    console.log('✅ Panorama loaded');
-  },
-  undefined,
-  err => {
-    console.error('❌ Failed to load panorama', err);
-  }
-);
+  console.log('✅ Panorama loaded');
+}, undefined, err => {
+  console.error('❌ Failed to load panorama', err);
+});
 
 // ==================== Raycaster ====================
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-window.addEventListener('click', onClick);
 function onClick(event) {
-  if (!sphereMesh) return;
-
-  if (!drawMode) return; // ❌ إذا لم يكن في وضع الرسم لا نفعل شيء
+  if (!sphereMesh || !drawMode) return;
 
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -113,6 +83,8 @@ function onClick(event) {
     drawPreviewPath();
   }
 }
+window.addEventListener('click', onClick);
+
 // ==================== Preview Line ====================
 function drawPreviewPath() {
   if (previewLine) {
@@ -145,13 +117,7 @@ function finalizePipe() {
   }
 
   const curve = new THREE.CatmullRomCurve3(selectedPoints);
-  const geometry = new THREE.TubeGeometry(
-    curve,
-    64,
-    currentPipeType.radius,
-    12,
-    false
-  );
+  const geometry = new THREE.TubeGeometry(curve, 64, currentPipeType.radius, 12, false);
 
   const material = new THREE.MeshStandardMaterial({
     color: currentPipeType.color,
@@ -173,16 +139,13 @@ function undoLastPoint() {
   if (selectedPoints.length === 0) return;
 
   selectedPoints.pop();
-
   if (previewLine) {
     scene.remove(previewLine);
     previewLine.geometry.dispose();
     previewLine = null;
   }
 
-  if (selectedPoints.length >= 2) {
-    drawPreviewPath();
-  }
+  if (selectedPoints.length >= 2) drawPreviewPath();
 }
 
 // ==================== Keyboard Shortcuts ====================
@@ -191,10 +154,7 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
     undoLastPoint();
   }
-
-  if (e.key === 'Enter') {
-    finalizePipe();
-  }
+  if (e.key === 'Enter') finalizePipe();
 });
 
 // ==================== Animation ====================
@@ -213,10 +173,17 @@ function animate() {
 animate();
 
 // ==================== UI ====================
-const btn = document.getElementById('toggleRotate');
-btn.onclick = () => {
+const btnRotate = document.getElementById('toggleRotate');
+btnRotate.onclick = () => {
   autorotate = !autorotate;
-  btn.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
+  btnRotate.textContent = autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
+};
+
+const btnDraw = document.getElementById('toggleDraw');
+btnDraw.onclick = () => {
+  drawMode = !drawMode;
+  btnDraw.textContent = drawMode ? '⛔ إيقاف الرسم' : '✏️ تفعيل الرسم';
+  btnDraw.style.backgroundColor = drawMode ? 'rgba(200,50,50,0.8)' : 'rgba(0,120,200,0.8)';
 };
 
 // ==================== Resize ====================
