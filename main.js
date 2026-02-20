@@ -2,7 +2,7 @@ import * as THREE from './libs/three.module.js';
 import { OrbitControls } from './libs/OrbitControls.js';
 
 // =======================================
-// المتغيرات الأساسية
+// متغيرات أساسية
 // =======================================
 let scene, camera, renderer, controls;
 let autorotate = true;
@@ -39,13 +39,16 @@ function init() {
     0.1,
     2000
   );
-  camera.position.set(0, 0, 0.1); // ضع الكاميرا داخل الكرة لكن بعيد قليلًا عن المركز
+
+  // ضع الكاميرا داخل الكرة بشكل مناسب
+  camera.position.set(0, 0, 0.1);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
   document.getElementById('container').appendChild(renderer.domElement);
 
+  // OrbitControls مع التدوير التلقائي
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableZoom = true;
   controls.enablePan = false;
@@ -63,22 +66,22 @@ function init() {
 }
 
 // =======================================
-// تحميل البانوراما بأفضل جودة
+// تحميل البانوراما
 // =======================================
 function loadPanorama() {
   const loader = new THREE.TextureLoader();
   loader.load(
-    './textures/StartPoint.jpg', // تأكد أن الصورة موجودة هنا
+    './textures/StartPoint.jpg',
     (texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace; // التصحيح الجديد لـ Three.js
+      texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.x = -1; // لعكس الصورة إذا لزم
+      texture.repeat.x = -1;
 
       const geometry = new THREE.SphereGeometry(500, 128, 128);
       const material = new THREE.MeshBasicMaterial({
         map: texture,
-        side: THREE.BackSide // مهم جدًا لأن الكاميرا داخل الكرة
+        side: THREE.BackSide
       });
 
       if (sphereMesh) scene.remove(sphereMesh);
@@ -196,7 +199,7 @@ function clearCurrentDrawing() {
 }
 
 // =======================================
-// أحداث لوحة المفاتيح
+// لوحة المفاتيح
 // =======================================
 function onKeyDown(e) {
   if (!drawMode) return;
