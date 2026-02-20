@@ -18,19 +18,15 @@ html, body {
 
 #loader {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background: black;
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  z-index: 10000;
+  z-index: 9999;
   font-weight: bold;
-  letter-spacing: 2px;
 }
 
 /* =======================================
@@ -50,11 +46,7 @@ html, body {
   backdrop-filter: blur(10px);
   font-weight: bold;
   box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-}
-
-.status-bar span {
-  font-weight: bold;
-  margin: 0 5px;
+  direction: ltr;
 }
 
 /* =======================================
@@ -89,11 +81,11 @@ html, body {
   box-shadow: 0 0 20px currentColor;
 }
 
-.color-btn.EL { background: #ffcc00; }
-.color-btn.AC { background: #00ccff; }
-.color-btn.WP { background: #0066cc; }
-.color-btn.WA { background: #ff3300; }
-.color-btn.GS { background: #33cc33; }
+.EL { background: #ffcc00; }
+.AC { background: #00ccff; }
+.WP { background: #0066cc; }
+.WA { background: #ff3300; }
+.GS { background: #33cc33; }
 
 /* =======================================
    تلميحات المفاتيح - أسفل اليسار
@@ -107,7 +99,7 @@ html, body {
   padding: 15px 20px;
   border-radius: 15px;
   font-size: 14px;
-  line-height: 2;
+  line-height: 2.2;
   z-index: 1000;
   border: 2px solid #4a6c8f;
   backdrop-filter: blur(10px);
@@ -125,9 +117,9 @@ html, body {
 }
 
 /* =======================================
-   الأزرار الرئيسية - أسفل المنتصف
+   الحاوية الرئيسية للأزرار - أسفل المنتصف
    ======================================= */
-.main-controls {
+.button-container {
   position: fixed;
   bottom: 25px;
   left: 50%;
@@ -143,7 +135,12 @@ html, body {
   box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
-.main-controls button {
+/* أنماط الأزرار العامة */
+.button-container button,
+#toggleRotate,
+#toggleDraw,
+#finalizeBtn,
+#clearBtn {
   padding: 10px 20px;
   border: none;
   border-radius: 30px;
@@ -155,13 +152,22 @@ html, body {
   min-width: 110px;
   border: 1px solid rgba(255,255,255,0.2);
   white-space: nowrap;
+  position: relative;
+  bottom: auto;
+  left: auto;
+  margin: 0;
 }
 
-.main-controls button:hover {
+.button-container button:hover,
+#toggleRotate:hover,
+#toggleDraw:hover,
+#finalizeBtn:hover,
+#clearBtn:hover {
   transform: translateY(-3px);
   box-shadow: 0 5px 15px rgba(0,0,0,0.4);
 }
 
+/* ألوان الأزرار */
 #toggleRotate { background: #4a6c8f; }
 #toggleDraw { background: #8f6c4a; }
 #finalizeBtn { background: #228822; }
@@ -183,7 +189,7 @@ html, body {
   border-radius: 20px;
   border: 2px solid #4a6c8f;
   backdrop-filter: blur(10px);
-  max-width: 180px;
+  min-width: 160px;
 }
 
 .export-controls button {
@@ -206,6 +212,7 @@ html, body {
   box-shadow: 0 5px 15px rgba(0,0,0,0.4);
 }
 
+/* ألوان أزرار التصدير */
 .export-with { background: linear-gradient(135deg, #8844aa, #aa66cc); }
 .export-without { background: linear-gradient(135deg, #448844, #66aa66); }
 .export-data { background: linear-gradient(135deg, #aa44aa, #cc66cc); }
@@ -214,15 +221,8 @@ html, body {
 /* =======================================
    توافق مع الشاشات الصغيرة
    ======================================= */
-@media (max-width: 1400px) {
-  .main-controls { transform: translateX(-50%) scale(0.95); }
-  .export-controls { transform: scale(0.95); transform-origin: bottom right; }
-  .color-panel { transform: scale(0.95); transform-origin: top left; }
-  .hint { transform: scale(0.95); transform-origin: bottom left; }
-}
-
 @media (max-width: 1200px) {
-  .main-controls {
+  .button-container {
     flex-wrap: wrap;
     width: 90%;
     bottom: 10px;
@@ -230,7 +230,11 @@ html, body {
     gap: 8px;
   }
   
-  .main-controls button {
+  .button-container button,
+  #toggleRotate,
+  #toggleDraw,
+  #finalizeBtn,
+  #clearBtn {
     flex: 1 1 auto;
     min-width: 80px;
     padding: 8px 12px;
@@ -238,45 +242,25 @@ html, body {
   }
   
   .export-controls {
-    bottom: auto;
-    top: 20px;
-    right: 20px;
-    max-width: 160px;
+    max-width: 140px;
   }
   
   .export-controls button {
     font-size: 12px;
-    padding: 8px 12px;
-  }
-  
-  .hint {
-    display: none;
-  }
-  
-  .color-panel {
-    top: 80px;
-    left: 20px;
+    padding: 8px 10px;
   }
 }
 
 @media (max-width: 768px) {
   .export-controls {
-    position: fixed;
-    top: auto;
     bottom: 100px;
     right: 10px;
-    max-width: 150px;
+    max-width: 130px;
   }
   
-  .main-controls {
+  .button-container {
     bottom: 10px;
     padding: 8px;
-  }
-  
-  .main-controls button {
-    padding: 6px 10px;
-    font-size: 12px;
-    min-width: 60px;
   }
   
   .status-bar {
@@ -295,6 +279,10 @@ html, body {
   .color-btn {
     width: 30px;
     height: 30px;
+  }
+  
+  .hint {
+    display: none;
   }
 }
 
@@ -315,6 +303,6 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.main-controls {
+.button-container {
   animation: fadeIn 0.3s ease;
 }
