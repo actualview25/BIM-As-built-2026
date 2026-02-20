@@ -39,7 +39,7 @@ function init() {
     0.1,
     2000
   );
-  camera.position.set(0, 0, 0); // داخل الكرة
+  camera.position.set(0, 0, 0.1); // داخل الكرة
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -85,8 +85,6 @@ function loadPanorama() {
       sphereMesh = new THREE.Mesh(geometry, material);
       scene.add(sphereMesh);
 
-      const loaderDiv = document.getElementById('loader');
-      if (loaderDiv) loaderDiv.style.display = 'none';
       console.log('✅ Panorama Loaded');
     },
     undefined,
@@ -112,15 +110,17 @@ markerPreview.visible = false;
 function onClick(e) {
   if (!drawMode || !sphereMesh) return;
 
-  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  // تجاهل أي نقر خارج canvas
+  if (e.target !== renderer.domElement) return;
+
+  mouse.x = (e.clientX / renderer.domElement.clientWidth) * 2 - 1;
+  mouse.y = -(e.clientY / renderer.domElement.clientHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObject(sphereMesh);
 
   if (hits.length) {
-    const hit = hits[0].point;
-    addPoint(hit);
+    addPoint(hits[0].point);
   }
 }
 
@@ -131,8 +131,14 @@ function onMouseMove(e) {
     return;
   }
 
-  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  // تجاهل أي مؤشر خارج الـ canvas
+  if (e.target !== renderer.domElement) {
+    markerPreview.visible = false;
+    return;
+  }
+
+  mouse.x = (e.clientX / renderer.domElement.clientWidth) * 2 - 1;
+  mouse.y = -(e.clientY / renderer.domElement.clientHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObject(sphereMesh);
@@ -201,7 +207,6 @@ function saveCurrentPath() {
   clearCurrentDrawing();
 }
 
-// حذف الرسم الحالي
 function clearCurrentDrawing() {
   selectedPoints = [];
   pointMarkers.forEach(m => scene.remove(m));
@@ -239,8 +244,8 @@ function onKeyDown(e) {
 // إعداد الأحداث
 // =======================================
 function setupEvents() {
-  window.addEventListener('click', onClick);
-  window.addEventListener('mousemove', onMouseMove);
+  renderer.domElement.addEventListener('click', onClick);
+  renderer.domElement.addEventListener('mousemove', onMouseMove);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('resize', onResize);
 
@@ -253,6 +258,11 @@ function setupEvents() {
     drawMode = !drawMode;
     document.body.style.cursor = drawMode ? 'crosshair' : 'default';
     markerPreview.visible = drawMode;
+
+    // السماح بالدوران دائمًا
+    controls.enableRotate = true;
+    controls.autoRotate = autorotate;
+
     if (!drawMode) clearCurrentDrawing();
   };
 }
