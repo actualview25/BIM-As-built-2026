@@ -10,6 +10,14 @@ let sphereMesh = null;
 let selectedPoints = [];
 let previewLine = null;
 let pipes = [];
+let drawMode = false; // للتحكم في وضع الرسم
+const pipeColors = {
+  EL: 0xffcc00,
+  AC: 0x00ccff,
+  WP: 0x0066cc,
+  WA: 0xff3300,
+  GS: 0x33cc33
+};
 let drawMode = false; // افتراضياً لا نرسم
 let currentPipeType = { radius: 0.6, color: 0xffcc00 };
 
