@@ -40,15 +40,15 @@ function init() {
     2000
   );
 
-  // الكاميرا خارج المركز قليلًا لتجنب ظهور شاشة سوداء
-  camera.position.set(0, 0, 5);
+  // 🔴 التعديل الأهم: الكاميرا داخل الكرة
+  camera.position.set(0, 0, 0.1);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
   document.getElementById('container').appendChild(renderer.domElement);
 
-  // تحكم OrbitControls مع التدوير التلقائي
+  // تحكم OrbitControls
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableZoom = true;
   controls.enablePan = false;
@@ -73,7 +73,7 @@ function init() {
 function loadPanorama() {
   const loader = new THREE.TextureLoader();
   loader.load(
-    './textures/StartPoint.jpg', // تأكد أن الصورة موجودة هنا
+    './textures/StartPoint.jpg',
     (texture) => {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = THREE.RepeatWrapping;
@@ -83,20 +83,44 @@ function loadPanorama() {
       const geometry = new THREE.SphereGeometry(500, 128, 128);
       const material = new THREE.MeshBasicMaterial({
         map: texture,
-        side: THREE.BackSide
+        side: THREE.BackSide // 🔴 مهم للرؤية من الداخل
       });
 
       if (sphereMesh) scene.remove(sphereMesh);
       sphereMesh = new THREE.Mesh(geometry, material);
       scene.add(sphereMesh);
 
+      // إخفاء شاشة التحميل
+      document.getElementById('loader').style.display = 'none';
+
       console.log('✅ Panorama Loaded');
       console.log('Camera position:', camera.position);
-      console.log('Sphere bounding sphere:', sphereMesh.geometry.boundingSphere);
+      
+      // إضافة معاينة المؤشر بعد تحميل الكرة
+      setupMarkerPreview();
     },
     undefined,
-    (err) => console.error('❌ خطأ تحميل البانوراما:', err)
+    (err) => {
+      console.error('❌ خطأ تحميل البانوراما:', err);
+      // في حالة الخطأ، نخفي شاشة التحميل أيضاً
+      document.getElementById('loader').style.display = 'none';
+    }
   );
+}
+
+// ======================
+// إعداد معاينة المؤشر
+// ======================
+function setupMarkerPreview() {
+  const markerPreview = new THREE.Mesh(
+    new THREE.SphereGeometry(5, 12, 12),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 })
+  );
+  scene.add(markerPreview);
+  markerPreview.visible = false;
+
+  // تحديث دالة onMouseMove لاستخدام markerPreview
+  window.markerPreview = markerPreview;
 }
 
 // ======================
@@ -104,12 +128,6 @@ function loadPanorama() {
 // ======================
 const mouse = new THREE.Vector2();
 const raycaster = new THREE.Raycaster();
-const markerPreview = new THREE.Mesh(
-  new THREE.SphereGeometry(5, 12, 12),
-  new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 })
-);
-scene.add(markerPreview);
-markerPreview.visible = false;
 
 function onClick(e) {
   if (!drawMode || !sphereMesh) return;
@@ -125,8 +143,14 @@ function onClick(e) {
 }
 
 function onMouseMove(e) {
-  if (!drawMode || !sphereMesh) { markerPreview.visible = false; return; }
-  if (e.target !== renderer.domElement) { markerPreview.visible = false; return; }
+  if (!drawMode || !sphereMesh || !window.markerPreview) { 
+    if (window.markerPreview) window.markerPreview.visible = false; 
+    return; 
+  }
+  if (e.target !== renderer.domElement) { 
+    window.markerPreview.visible = false; 
+    return; 
+  }
 
   mouse.x = (e.clientX / renderer.domElement.clientWidth) * 2 - 1;
   mouse.y = -(e.clientY / renderer.domElement.clientHeight) * 2 + 1;
@@ -135,9 +159,9 @@ function onMouseMove(e) {
   const hits = raycaster.intersectObject(sphereMesh);
 
   if (hits.length) {
-    markerPreview.position.copy(hits[0].point);
-    markerPreview.visible = true;
-  } else markerPreview.visible = false;
+    window.markerPreview.position.copy(hits[0].point);
+    window.markerPreview.visible = true;
+  } else window.markerPreview.visible = false;
 }
 
 // ======================
@@ -199,7 +223,11 @@ function clearCurrentDrawing() {
   selectedPoints = [];
   pointMarkers.forEach(m => scene.remove(m));
   pointMarkers = [];
-  if (tempLine) { scene.remove(tempLine); tempLine.geometry.dispose(); tempLine=null; }
+  if (tempLine) { 
+    scene.remove(tempLine); 
+    tempLine.geometry.dispose(); 
+    tempLine = null; 
+  }
 }
 
 // ======================
@@ -245,9 +273,9 @@ function setupEvents() {
   document.getElementById('toggleDraw').onclick = () => {
     drawMode = !drawMode;
     document.body.style.cursor = drawMode ? 'crosshair' : 'default';
-    markerPreview.visible = drawMode;
-    controls.enableRotate = true;
-    controls.autoRotate = autorotate;
+    if (window.markerPreview) window.markerPreview.visible = drawMode;
+    controls.enableRotate = !drawMode; // تعطيل التدوير أثناء الرسم
+    controls.autoRotate = autorotate && !drawMode;
   };
 
   // زر تثبيت المسار
