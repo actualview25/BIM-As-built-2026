@@ -31,8 +31,6 @@ let currentPathType = 'EL';
 window.setCurrentPathType = (t) => {
   currentPathType = t;
   console.log('🎨 تغيير النوع إلى:', t);
-  
-  // تحديث لون معاينة المؤشر
   if (markerPreview) {
     markerPreview.material.color.setHex(pathColors[currentPathType]);
     markerPreview.material.emissive.setHex(pathColors[currentPathType]);
@@ -42,26 +40,20 @@ window.setCurrentPathType = (t) => {
 // ======================
 // تهيئة المشهد
 // ======================
-init();
-
 function init() {
   console.log('🚀 بدء التهيئة...');
   
-  // المشهد
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
 
-  // الكاميرا - داخل الكرة
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
   camera.position.set(0, 0, 0.1);
 
-  // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
   document.getElementById('container').appendChild(renderer.domElement);
 
-  // الإضاءة
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
   scene.add(ambientLight);
 
@@ -73,7 +65,6 @@ function init() {
   dirLight2.position.set(-1, -1, -0.5);
   scene.add(dirLight2);
 
-  // التحكم
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableZoom = true;
   controls.enablePan = false;
@@ -83,16 +74,9 @@ function init() {
   controls.target.set(0, 0, 0);
   controls.update();
 
-  // تحميل البانوراما
   loadPanorama();
-  
-  // إعداد الأحداث
   setupEvents();
-  
-  // إعداد Canvas التصدير
   setupExportCanvas();
-  
-  // بدء الرسوم المتحركة
   animate();
   
   console.log('✅ التهيئة اكتملت');
@@ -114,29 +98,25 @@ function loadPanorama() {
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.x = -1; // تصحيح الانعكاس
+      texture.repeat.x = -1;
 
       const geometry = new THREE.SphereGeometry(500, 128, 128);
       const material = new THREE.MeshBasicMaterial({
         map: texture,
-        side: THREE.BackSide // الرؤية من الداخل
+        side: THREE.BackSide
       });
 
       sphereMesh = new THREE.Mesh(geometry, material);
       scene.add(sphereMesh);
       
-      // إخفاء شاشة التحميل
       const loader = document.getElementById('loader');
       if (loader) loader.style.display = 'none';
       
-      // إعداد معاينة المؤشر
       setupMarkerPreview();
-      
-      // إضافة مسار تجريبي
       addDemoPath();
     },
     (progress) => {
-      console.log(`⏳ التحميل: ${Math.round(progress.loaded / progress.total * 100)}%`);
+      console.log(`⏳ التحميل: ${Math.round((progress.loaded / progress.total) * 100)}%`);
     },
     (error) => {
       console.error('❌ فشل تحميل الصورة:', error);
@@ -185,11 +165,9 @@ function setupMarkerPreview() {
 // ======================
 function addDemoPath() {
   setTimeout(() => {
-    // نقاط تجريبية - مسار مربع مع انكسارات واضحة
     const points = [];
-    
-    // إنشاء مسار بشكل مربع على سطح الكرة
     const radius = 400;
+    
     points.push(new THREE.Vector3(radius, 0, 0).normalize().multiplyScalar(480));
     points.push(new THREE.Vector3(0, radius * 0.7, radius * 0.7).normalize().multiplyScalar(480));
     points.push(new THREE.Vector3(-radius, 0, 0).normalize().multiplyScalar(480));
@@ -197,14 +175,9 @@ function addDemoPath() {
     points.push(new THREE.Vector3(radius, 0, 0).normalize().multiplyScalar(480));
     
     selectedPoints = points;
-    
-    // إضافة علامات للنقاط
     points.forEach(point => addPointMarker(point));
-    
-    // رسم خط المعاينة
     updateTempLine();
     
-    // حفظ المسار بعد ثانية
     setTimeout(() => {
       saveCurrentPath();
     }, 2000);
@@ -292,8 +265,7 @@ function updateTempLine() {
   if (selectedPoints.length >= 2) {
     const geometry = new THREE.BufferGeometry().setFromPoints(selectedPoints);
     const material = new THREE.LineBasicMaterial({ 
-      color: pathColors[currentPathType],
-      linewidth: 2
+      color: pathColors[currentPathType]
     });
     tempLine = new THREE.Line(geometry, material);
     scene.add(tempLine);
@@ -316,8 +288,6 @@ function clearCurrentDrawing() {
 // ======================
 // دوال إنشاء المسارات المستقيمة
 // ======================
-
-// حفظ المسار الحالي
 function saveCurrentPath() {
   if (selectedPoints.length < 2) {
     alert('⚠️ أضف نقطتين على الأقل');
@@ -325,17 +295,13 @@ function saveCurrentPath() {
   }
 
   try {
-    // حذف خط المعاينة
     if (tempLine) {
       scene.remove(tempLine);
       tempLine.geometry.dispose();
       tempLine = null;
     }
     
-    // إنشاء مسار مستقيم مع انكسارات حادة
     createStraightPath(selectedPoints);
-    
-    // تنظيف النقاط المؤقتة
     clearCurrentDrawing();
     
     console.log('✅ تم حفظ المسار المستقيم');
@@ -345,37 +311,30 @@ function saveCurrentPath() {
   }
 }
 
-// إنشاء مسار مستقيم مع انكسارات حادة
 function createStraightPath(points) {
   if (points.length < 2) return;
   
   const color = pathColors[currentPathType];
   
-  // إنشاء أجزاء مستقيمة بين كل نقطتين
   for (let i = 0; i < points.length - 1; i++) {
     const start = points[i];
     const end = points[i + 1];
     
-    // حساب الاتجاه والمسافة
     const direction = new THREE.Vector3().subVectors(end, start);
     const distance = direction.length();
     
-    // تجنب الأجزاء القصيرة جداً
     if (distance < 5) continue;
     
-    // إنشاء أسطوانة (أنبوب مستقيم)
     const cylinderRadius = 3.5;
     const cylinderHeight = distance;
     const cylinderGeo = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, cylinderHeight, 12);
     
-    // تدوير الأسطوانة لتتجه من start إلى end
     const quaternion = new THREE.Quaternion();
     const defaultDir = new THREE.Vector3(0, 1, 0);
     const targetDir = direction.clone().normalize();
     
     quaternion.setFromUnitVectors(defaultDir, targetDir);
     
-    // مادة لامعة مع إضاءة
     const material = new THREE.MeshStandardMaterial({
       color: color,
       emissive: color,
@@ -387,11 +346,9 @@ function createStraightPath(points) {
     const cylinder = new THREE.Mesh(cylinderGeo, material);
     cylinder.applyQuaternion(quaternion);
     
-    // وضع الأسطوانة في المنتصف بين النقطتين
     const center = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
     cylinder.position.copy(center);
     
-    // إضافة بيانات
     cylinder.userData = {
       type: currentPathType,
       points: [start.clone(), end.clone()],
@@ -402,7 +359,6 @@ function createStraightPath(points) {
     paths.push(cylinder);
   }
   
-  // إضافة كرات عند نقاط الانكسار
   for (let i = 0; i < points.length; i++) {
     const sphereRadius = (i === 0 || i === points.length - 1) ? 6 : 5;
     
@@ -435,39 +391,25 @@ function createStraightPath(points) {
 // ======================
 // نظام تصدير الصور البانورامية 360 درجة
 // ======================
-
-// إعداد Canvas للتصدير
 function setupExportCanvas() {
   exportCanvas = document.createElement('canvas');
-  exportCanvas.width = 4096; // دقة عالية للبانوراما
-  exportCanvas.height = 2048; // نسبة 2:1 للصور البانورامية
+  exportCanvas.width = 4096;
+  exportCanvas.height = 2048;
   exportContext = exportCanvas.getContext('2d');
   console.log('✅ Canvas التصدير جاهز');
 }
 
-// دالة تحويل الإحداثيات ثلاثية الأبعاد إلى إحداثيات النسيج
 function projectToUV(point) {
-  // تطبيع النقطة إلى سطح الكرة
   const normalized = point.clone().normalize();
-  
-  // تحويل إلى إحداثيات كروية
-  const theta = Math.acos(normalized.y); // زاوية الانحدار (0 to PI)
-  let phi = Math.atan2(normalized.z, normalized.x); // زاوية الدوران (-PI to PI)
-  
-  // تصحيح اتجاه الصورة (لأن الصورة معكوسة أفقياً)
+  const theta = Math.acos(normalized.y);
+  let phi = Math.atan2(normalized.z, normalized.x);
   phi = -phi;
-  
-  // تحويل إلى UV (0 to 1)
   let u = (phi + Math.PI) / (2 * Math.PI);
   const v = theta / Math.PI;
-  
-  // التأكد من أن u في النطاق 0-1
   u = (u + 1) % 1;
-  
   return { u, v };
 }
 
-// دالة رسم المسار على القماش
 function drawPathOnCanvas(ctx, points, color, width = 4) {
   if (points.length < 2) return;
   
@@ -477,10 +419,8 @@ function drawPathOnCanvas(ctx, points, color, width = 4) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   
-  // تحويل جميع النقاط إلى UV
   const uvPoints = points.map(p => projectToUV(p));
   
-  // رسم الخطوط مع التعامل مع حافة الصورة
   ctx.beginPath();
   
   for (let i = 0; i < uvPoints.length - 1; i++) {
@@ -492,35 +432,28 @@ function drawPathOnCanvas(ctx, points, color, width = 4) {
     const x2 = p2.u * exportCanvas.width;
     const y2 = p2.v * exportCanvas.height;
     
-    // التحقق من عبور الحافة
     if (Math.abs(x2 - x1) > exportCanvas.width / 2) {
-      // الخط يعبر الحافة - نرسم جزئين
       ctx.stroke();
       ctx.beginPath();
       
       if (x1 < exportCanvas.width / 2) {
-        // الجزء الأول: من x1 إلى الحافة اليمنى
         ctx.moveTo(x1, y1);
         ctx.lineTo(exportCanvas.width, y1);
         ctx.stroke();
         
-        // الجزء الثاني: من الحافة اليسرى إلى x2
         ctx.beginPath();
         ctx.moveTo(0, y2);
         ctx.lineTo(x2, y2);
       } else {
-        // الجزء الأول: من x1 إلى الحافة اليسرى
         ctx.moveTo(x1, y1);
         ctx.lineTo(0, y1);
         ctx.stroke();
         
-        // الجزء الثاني: من الحافة اليمنى إلى x2
         ctx.beginPath();
         ctx.moveTo(exportCanvas.width, y2);
         ctx.lineTo(x2, y2);
       }
     } else {
-      // خط عادي
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
     }
@@ -528,12 +461,9 @@ function drawPathOnCanvas(ctx, points, color, width = 4) {
   
   ctx.stroke();
   
-  // رسم النقاط
   uvPoints.forEach((uv, index) => {
     const x = uv.u * exportCanvas.width;
     const y = uv.v * exportCanvas.height;
-    
-    // حجم النقطة حسب موقعها
     const radius = (index === 0 || index === uvPoints.length - 1) ? width * 2.5 : width * 2;
     
     ctx.beginPath();
@@ -541,7 +471,6 @@ function drawPathOnCanvas(ctx, points, color, width = 4) {
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
     
-    // حدود بيضاء للنقاط
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -550,7 +479,6 @@ function drawPathOnCanvas(ctx, points, color, width = 4) {
   ctx.restore();
 }
 
-// دالة تصدير البانوراما 360
 function exportPanorama(includePaths = true) {
   if (isExporting) {
     console.log('⏳ جاري التصدير بالفعل...');
@@ -566,40 +494,30 @@ function exportPanorama(includePaths = true) {
   
   console.log(`🔄 جاري تصدير البانوراما 360 ${includePaths ? 'مع' : 'بدون'} المسارات...`);
   
-  // الحصول على النسيج الأصلي
   const texture = sphereMesh.material.map;
   const image = texture.image;
   
-  // رسم الصورة الأصلية على القماش
   exportContext.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
   exportContext.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
   
-  // إذا أردنا إضافة المسارات
   if (includePaths) {
-    // رسم جميع المسارات المحفوظة
     paths.forEach(path => {
       if (path.userData && path.userData.points && path.userData.points.length > 0) {
         const points = path.userData.points;
         const color = pathColors[path.userData.type] || 0xffcc00;
         const colorStr = '#' + color.toString(16).padStart(6, '0');
-        
         drawPathOnCanvas(exportContext, points, colorStr, 4);
       }
     });
     
-    // رسم المسار الحالي إذا كان موجوداً
     if (selectedPoints.length > 0) {
       const colorStr = '#' + pathColors[currentPathType].toString(16).padStart(6, '0');
       drawPathOnCanvas(exportContext, selectedPoints, colorStr, 3);
     }
   }
   
-  // تصدير الصورة
   try {
-    // تحويل القماش إلى صورة
     const dataURL = exportCanvas.toDataURL('image/png');
-    
-    // إنشاء رابط التحميل
     const link = document.createElement('a');
     link.download = `panorama-360-${includePaths ? 'with-paths' : 'without-paths'}-${Date.now()}.png`;
     link.href = dataURL;
@@ -615,7 +533,6 @@ function exportPanorama(includePaths = true) {
   isExporting = false;
 }
 
-// دالة تصدير بيانات المسارات لـ Marzipano
 function exportMarzipanoData() {
   if (!sphereMesh || !sphereMesh.material || !sphereMesh.material.map) {
     alert('❌ الصورة البانورامية غير متوفرة');
@@ -624,14 +541,11 @@ function exportMarzipanoData() {
   
   console.log('🎯 تحضير بيانات Marzipano...');
   
-  // تجميع بيانات المسارات
   const pathsData = [];
   
   paths.forEach(path => {
     if (path.userData && path.userData.points && path.userData.points.length > 0) {
       const points = path.userData.points;
-      
-      // تحويل النقاط إلى إحداثيات UV
       const uvPoints = points.map(p => {
         const uv = projectToUV(p);
         return [uv.u, uv.v];
@@ -645,7 +559,6 @@ function exportMarzipanoData() {
     }
   });
   
-  // إضافة المسار الحالي إذا كان موجوداً
   if (selectedPoints.length > 0) {
     const uvPoints = selectedPoints.map(p => {
       const uv = projectToUV(p);
@@ -660,7 +573,6 @@ function exportMarzipanoData() {
     });
   }
   
-  // إنشاء ملف البيانات
   const marzipanoData = {
     version: "1.0",
     timestamp: Date.now(),
@@ -680,67 +592,145 @@ function exportMarzipanoData() {
   console.log('✅ تم تصدير بيانات Marzipano');
 }
 
-// دالة تصدير كاملة (صورة + بيانات)
 function exportComplete() {
-  // تصدير الصورة مع المسارات
   exportPanorama(true);
-  
-  // تصدير البيانات بعد قليل
   setTimeout(() => {
     exportMarzipanoData();
   }, 500);
 }
 
-// إنشاء أزرار التصدير
-function addExportButtons() {
-  const buttonContainer = document.createElement('div');
-  buttonContainer.style.position = 'absolute';
-  buttonContainer.style.bottom = '100px';
-  buttonContainer.style.right = '25px';
-  buttonContainer.style.display = 'flex';
-  buttonContainer.style.flexDirection = 'column';
-  buttonContainer.style.gap = '10px';
-  buttonContainer.style.zIndex = '1000';
-  buttonContainer.style.background = 'rgba(0, 0, 0, 0.8)';
-  buttonContainer.style.padding = '15px';
-  buttonContainer.style.borderRadius = '20px';
-  buttonContainer.style.border = '2px solid #4a6c8f';
-  buttonContainer.style.backdropFilter = 'blur(10px)';
+// ======================
+// أحداث لوحة المفاتيح
+// ======================
+function onKeyDown(e) {
+  if (!drawMode) return;
   
-  const buttons = [
-    {
-      text: '🌐 تصدير بانوراما مع المسارات',
-      bg: '#8844aa',
-      border: '#cc88ff',
-      action: () => exportPanorama(true)
-    },
-    {
-      text: '🌅 تصدير بانوراما بدون مسارات',
-      bg: '#448844',
-      border: '#88ff88',
-      action: () => exportPanorama(false)
-    },
-    {
-      text: '📊 تصدير بيانات Marzipano',
-      bg: '#aa44aa',
-      border: '#ff88ff',
-      action: exportMarzipanoData
-    },
-    {
-      text: '📦 تصدير كامل (صورة + بيانات)',
-      bg: '#ff8844',
-      border: '#ffaa88',
-      action: exportComplete
+  switch(e.key) {
+    case 'Enter':
+      e.preventDefault();
+      saveCurrentPath();
+      break;
+      
+    case 'Backspace':
+      e.preventDefault();
+      if (selectedPoints.length > 0) {
+        selectedPoints.pop();
+        if (pointMarkers.length > 0) {
+          const lastMarker = pointMarkers.pop();
+          scene.remove(lastMarker);
+        }
+        updateTempLine();
+        console.log('⏪ تم حذف آخر نقطة');
+      }
+      break;
+      
+    case 'Escape':
+      e.preventDefault();
+      clearCurrentDrawing();
+      console.log('🗑️ تم إلغاء الرسم');
+      break;
+      
+    case 'n':
+    case 'N':
+      e.preventDefault();
+      clearCurrentDrawing();
+      console.log('🆕 بدء مسار جديد');
+      break;
+      
+    case '1': 
+      currentPathType = 'EL'; 
+      window.setCurrentPathType('EL');
+      break;
+    case '2': 
+      currentPathType = 'AC'; 
+      window.setCurrentPathType('AC');
+      break;
+    case '3': 
+      currentPathType = 'WP'; 
+      window.setCurrentPathType('WP');
+      break;
+    case '4': 
+      currentPathType = 'WA'; 
+      window.setCurrentPathType('WA');
+      break;
+    case '5': 
+      currentPathType = 'GS'; 
+      window.setCurrentPathType('GS');
+      break;
+  }
+}
+
+// ======================
+// إعداد الأحداث
+// ======================
+function setupEvents() {
+  renderer.domElement.addEventListener('click', onClick);
+  renderer.domElement.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('keydown', onKeyDown);
+  window.addEventListener('resize', onResize);
+  
+  document.getElementById('toggleRotate').onclick = () => {
+    autorotate = !autorotate;
+    controls.autoRotate = autorotate;
+    document.getElementById('toggleRotate').textContent = 
+      autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
+  };
+
+  document.getElementById('toggleDraw').onclick = () => {
+    drawMode = !drawMode;
+    const btn = document.getElementById('toggleDraw');
+    
+    if (drawMode) {
+      btn.textContent = '⛔ إيقاف الرسم';
+      btn.style.background = '#aa3333';
+      document.body.style.cursor = 'crosshair';
+      if (markerPreview) {
+        markerPreview.visible = true;
+        markerPreview.material.color.setHex(pathColors[currentPathType]);
+        markerPreview.material.emissive.setHex(pathColors[currentPathType]);
+      }
+      controls.autoRotate = false;
+    } else {
+      btn.textContent = '✏️ تفعيل الرسم';
+      btn.style.background = 'rgba(20, 30, 40, 0.9)';
+      document.body.style.cursor = 'default';
+      if (markerPreview) markerPreview.visible = false;
+      controls.autoRotate = autorotate;
+      clearCurrentDrawing();
     }
-  ];
+  };
+
+  const finalizeBtn = document.createElement('button');
+  finalizeBtn.textContent = '💾 تثبيت المسار';
+  finalizeBtn.style.position = 'absolute';
+  finalizeBtn.style.bottom = '25px';
+  finalizeBtn.style.left = '400px';
+  finalizeBtn.style.padding = '12px 24px';
+  finalizeBtn.style.zIndex = '100';
+  finalizeBtn.style.borderRadius = '40px';
+  finalizeBtn.style.background = '#228822';
+  finalizeBtn.style.color = 'white';
+  finalizeBtn.style.fontWeight = 'bold';
+  finalizeBtn.style.border = '2px solid #88ff88';
+  finalizeBtn.style.cursor = 'pointer';
+  finalizeBtn.style.fontSize = '16px';
+  document.body.appendChild(finalizeBtn);
+  finalizeBtn.onclick = () => saveCurrentPath();
   
-  buttons.forEach(btn => {
-    const button = document.createElement('button');
-    button.textContent = btn.text;
-    button.style.padding = '12px 24px';
-    button.style.background = btn.bg;
-    button.style.color = 'white';
-    button.style.border = `2px solid ${btn.border}`;
-    button.style.borderRadius = '40px';
-    button.style.cursor = 'pointer';
-    button.style.fontWeig
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = '🗑️ مسح الكل';
+  clearBtn.style.position = 'absolute';
+  clearBtn.style.bottom = '25px';
+  clearBtn.style.left = '600px';
+  clearBtn.style.padding = '12px 24px';
+  clearBtn.style.zIndex = '100';
+  clearBtn.style.borderRadius = '40px';
+  clearBtn.style.background = '#882222';
+  clearBtn.style.color = 'white';
+  clearBtn.style.fontWeight = 'bold';
+  clearBtn.style.border = '2px solid #ff8888';
+  clearBtn.style.cursor = 'pointer';
+  clearBtn.style.fontSize = '16px';
+  document.body.appendChild(clearBtn);
+
+  clearBtn.onc
