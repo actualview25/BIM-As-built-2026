@@ -5,6 +5,9 @@ let scene, camera, renderer, controls;
 let autorotate = true;
 let drawMode = false;
 
+// =======================================
+// المتغيرات الأساسية للرسم
+// =======================================
 let sphereMesh;
 let selectedPoints = [];
 let paths = [];
@@ -22,7 +25,9 @@ const pathColors = {
 let currentPathType = 'EL';
 window.setCurrentPathType = (t) => currentPathType = t;
 
-// ==================== Init ====================
+// =======================================
+// تهيئة المشهد والكاميرا
+// =======================================
 init();
 
 function init() {
@@ -34,12 +39,9 @@ function init() {
     0.1,
     2000
   );
-  camera.position.set(0,0,0);
+  camera.position.set(0, 0, 0); // داخل الكرة
 
-  renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    alpha: true
-  });
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
   document.getElementById('container').appendChild(renderer.domElement);
@@ -49,7 +51,7 @@ function init() {
   controls.enablePan = false;
   controls.enableDamping = true;
   controls.autoRotate = autorotate;
-  controls.autoRotateSpeed = 0.2; // بطئ جدًا للتدوير السلس
+  controls.autoRotateSpeed = 0.2;
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
   scene.add(ambientLight);
@@ -59,17 +61,22 @@ function init() {
   animate();
 }
 
-// ==================== Load Panorama ====================
+// =======================================
+// تحميل الصورة البانورامية بأفضل جودة
+// =======================================
 function loadPanorama() {
   const loader = new THREE.TextureLoader();
   loader.load(
     './textures/StartPoint.jpg',
     (texture) => {
-      texture.encoding = THREE.sRGBEncoding; // ⚡ تصحيح الألوان
+      texture.encoding = THREE.sRGBEncoding;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = true;
       texture.wrapS = THREE.RepeatWrapping;
       texture.repeat.x = -1;
 
-      const geometry = new THREE.SphereGeometry(500, 64, 64);
+      const geometry = new THREE.SphereGeometry(500, 128, 128); // segments مضاعفة
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         side: THREE.BackSide
@@ -78,7 +85,8 @@ function loadPanorama() {
       sphereMesh = new THREE.Mesh(geometry, material);
       scene.add(sphereMesh);
 
-      document.getElementById('loader').style.display = 'none';
+      const loaderDiv = document.getElementById('loader');
+      if (loaderDiv) loaderDiv.style.display = 'none';
       console.log('✅ Panorama Loaded');
     },
     undefined,
@@ -86,10 +94,21 @@ function loadPanorama() {
   );
 }
 
-// ==================== Drawing ====================
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
+// =======================================
+// رسم المسارات باستخدام مؤشر ماوس
+// =======================================
 
+// مؤشر ماوس على الكرة
+const mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+const markerPreview = new THREE.Mesh(
+  new THREE.SphereGeometry(5, 12, 12),
+  new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 })
+);
+scene.add(markerPreview);
+markerPreview.visible = false;
+
+// النقر على الكرة لإضافة نقطة
 function onClick(e) {
   if (!drawMode || !sphereMesh) return;
 
@@ -99,20 +118,45 @@ function onClick(e) {
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObject(sphereMesh);
 
-  if (hits.length) addPoint(hits[0].point);
+  if (hits.length) {
+    const hit = hits[0].point;
+    addPoint(hit);
+  }
 }
 
+// تحديث موقع مؤشر الماوس قبل النقر
+function onMouseMove(e) {
+  if (!drawMode || !sphereMesh) {
+    markerPreview.visible = false;
+    return;
+  }
+
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObject(sphereMesh);
+
+  if (hits.length) {
+    markerPreview.position.copy(hits[0].point);
+    markerPreview.visible = true;
+  } else {
+    markerPreview.visible = false;
+  }
+}
+
+// =======================================
+// إدارة النقاط والمسارات
+// =======================================
 function addPoint(pos) {
   selectedPoints.push(pos.clone());
 
-  const markerRadius = 5; // مناسب لنصف قطر 500
-  const g = new THREE.SphereGeometry(markerRadius, 12, 12);
+  const g = new THREE.SphereGeometry(5, 12, 12);
   const m = new THREE.MeshStandardMaterial({
     color: pathColors[currentPathType],
     emissive: pathColors[currentPathType],
     emissiveIntensity: 0.5
   });
-
   const marker = new THREE.Mesh(g, m);
   marker.position.copy(pos);
   scene.add(marker);
@@ -131,18 +175,73 @@ function updateTempLine() {
   if (selectedPoints.length < 2) return;
 
   const g = new THREE.BufferGeometry().setFromPoints(selectedPoints);
-  const m = new THREE.LineBasicMaterial({
-    color: pathColors[currentPathType],
-    linewidth: 2
-  });
-
+  const m = new THREE.LineBasicMaterial({ color: pathColors[currentPathType], linewidth: 2 });
   tempLine = new THREE.Line(g, m);
   scene.add(tempLine);
 }
 
-// ==================== Events ====================
+function saveCurrentPath() {
+  if (selectedPoints.length < 2) return;
+
+  const curve = new THREE.CatmullRomCurve3(selectedPoints);
+  const tubeGeo = new THREE.TubeGeometry(curve, 100, 3, 8, false);
+  const mat = new THREE.MeshStandardMaterial({
+    color: pathColors[currentPathType],
+    emissive: pathColors[currentPathType],
+    emissiveIntensity: 0.3,
+    roughness: 0.3,
+    metalness: 0.2
+  });
+
+  const pathMesh = new THREE.Mesh(tubeGeo, mat);
+  pathMesh.userData = { type: currentPathType, points: [...selectedPoints], createdAt: Date.now() };
+  scene.add(pathMesh);
+  paths.push(pathMesh);
+
+  clearCurrentDrawing();
+}
+
+// حذف الرسم الحالي
+function clearCurrentDrawing() {
+  selectedPoints = [];
+  pointMarkers.forEach(m => scene.remove(m));
+  pointMarkers = [];
+  if (tempLine) { scene.remove(tempLine); tempLine.geometry.dispose(); tempLine=null; }
+}
+
+// =======================================
+// أحداث لوحة المفاتيح
+// =======================================
+function onKeyDown(e) {
+  if (!drawMode) return;
+
+  switch(e.key) {
+    case 'Enter': saveCurrentPath(); break;
+    case 'Backspace':
+      if (selectedPoints.length>0){
+        selectedPoints.pop();
+        const last = pointMarkers.pop();
+        if(last) scene.remove(last);
+        updateTempLine();
+      }
+      break;
+    case 'Escape': clearCurrentDrawing(); break;
+    case 'n': case 'N': clearCurrentDrawing(); break;
+    case '1': currentPathType='EL'; break;
+    case '2': currentPathType='AC'; break;
+    case '3': currentPathType='WP'; break;
+    case '4': currentPathType='WA'; break;
+    case '5': currentPathType='GS'; break;
+  }
+}
+
+// =======================================
+// إعداد الأحداث
+// =======================================
 function setupEvents() {
   window.addEventListener('click', onClick);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('keydown', onKeyDown);
   window.addEventListener('resize', onResize);
 
   document.getElementById('toggleRotate').onclick = () => {
@@ -153,28 +252,23 @@ function setupEvents() {
   document.getElementById('toggleDraw').onclick = () => {
     drawMode = !drawMode;
     document.body.style.cursor = drawMode ? 'crosshair' : 'default';
-    if (!drawMode) clearDrawing();
+    markerPreview.visible = drawMode;
+    if (!drawMode) clearCurrentDrawing();
   };
 }
 
-function clearDrawing() {
-  selectedPoints = [];
-  pointMarkers.forEach(m=>scene.remove(m));
-  pointMarkers = [];
-  if (tempLine) {
-    scene.remove(tempLine);
-    tempLine.geometry.dispose();
-    tempLine = null;
-  }
-}
-
+// =======================================
+// Resize
+// =======================================
 function onResize() {
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// ==================== Animate ====================
+// =======================================
+// Animate
+// =======================================
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
