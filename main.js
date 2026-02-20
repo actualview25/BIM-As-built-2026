@@ -29,7 +29,19 @@ scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
 dirLight.position.set(10, 10, 10);
 scene.add(dirLight);
+const drawBtn = document.getElementById('drawToggle');
 
+drawBtn.onclick = () => {
+  drawMode = !drawMode;
+
+  drawBtn.textContent = drawMode
+    ? '⛔ إيقاف الرسم'
+    : '✏️ بدء الرسم';
+
+  drawBtn.style.backgroundColor = drawMode
+    ? 'rgba(200,50,50,0.8)'
+    : 'rgba(0,120,200,0.8)';
+};
 // ==================== Camera ====================
 camera = new THREE.PerspectiveCamera(
   75,
