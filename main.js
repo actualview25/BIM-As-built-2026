@@ -15,6 +15,10 @@ let tempLine = null;
 let pointMarkers = [];
 let markerPreview = null;
 
+// متغيرات التصدير
+let exportCanvas, exportContext;
+let isExporting = false;
+
 const pathColors = {
   EL: 0xffcc00,
   AC: 0x00ccff,
@@ -27,6 +31,12 @@ let currentPathType = 'EL';
 window.setCurrentPathType = (t) => {
   currentPathType = t;
   console.log('🎨 تغيير النوع إلى:', t);
+  
+  // تحديث لون معاينة المؤشر
+  if (markerPreview) {
+    markerPreview.material.color.setHex(pathColors[currentPathType]);
+    markerPreview.material.emissive.setHex(pathColors[currentPathType]);
+  }
 };
 
 // ======================
@@ -78,6 +88,9 @@ function init() {
   
   // إعداد الأحداث
   setupEvents();
+  
+  // إعداد Canvas التصدير
+  setupExportCanvas();
   
   // بدء الرسوم المتحركة
   animate();
@@ -157,8 +170,8 @@ function createTestSphere() {
 function setupMarkerPreview() {
   const geometry = new THREE.SphereGeometry(8, 16, 16);
   const material = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    emissive: 0xffffff,
+    color: pathColors[currentPathType],
+    emissive: pathColors[currentPathType],
     emissiveIntensity: 0.8
   });
   
@@ -238,8 +251,6 @@ function onMouseMove(e) {
 
   if (hits.length) {
     markerPreview.position.copy(hits[0].point);
-    markerPreview.material.color.setHex(pathColors[currentPathType]);
-    markerPreview.material.emissive.setHex(pathColors[currentPathType]);
     markerPreview.visible = true;
   } else {
     markerPreview.visible = false;
@@ -303,10 +314,10 @@ function clearCurrentDrawing() {
 }
 
 // ======================
-// دوال إنشاء المسارات المستقيمة (الجزء الأهم)
+// دوال إنشاء المسارات المستقيمة
 // ======================
 
-// حفظ المسار الحالي - الخطوط المستقيمة مع انكسارات حادة
+// حفظ المسار الحالي
 function saveCurrentPath() {
   if (selectedPoints.length < 2) {
     alert('⚠️ أضف نقطتين على الأقل');
@@ -334,7 +345,7 @@ function saveCurrentPath() {
   }
 }
 
-// إنشاء مسار مستقيم مع انكسارات حادة (باستخدام أسطوانات)
+// إنشاء مسار مستقيم مع انكسارات حادة
 function createStraightPath(points) {
   if (points.length < 2) return;
   
@@ -352,14 +363,14 @@ function createStraightPath(points) {
     // تجنب الأجزاء القصيرة جداً
     if (distance < 5) continue;
     
-    // إنشاء أسطوانة (أنبوب مستقيم) - سمك مناسب
+    // إنشاء أسطوانة (أنبوب مستقيم)
     const cylinderRadius = 3.5;
     const cylinderHeight = distance;
     const cylinderGeo = new THREE.CylinderGeometry(cylinderRadius, cylinderRadius, cylinderHeight, 12);
     
     // تدوير الأسطوانة لتتجه من start إلى end
     const quaternion = new THREE.Quaternion();
-    const defaultDir = new THREE.Vector3(0, 1, 0); // الاتجاه الافتراضي للأسطوانة
+    const defaultDir = new THREE.Vector3(0, 1, 0);
     const targetDir = direction.clone().normalize();
     
     quaternion.setFromUnitVectors(defaultDir, targetDir);
@@ -383,18 +394,16 @@ function createStraightPath(points) {
     // إضافة بيانات
     cylinder.userData = {
       type: currentPathType,
-      isPathSegment: true,
-      start: start.clone(),
-      end: end.clone()
+      points: [start.clone(), end.clone()],
+      isPathSegment: true
     };
     
     scene.add(cylinder);
     paths.push(cylinder);
   }
   
-  // إضافة كرات عند نقاط الانكسار (لإخفاء الفراغات وإبراز الانكسارات)
+  // إضافة كرات عند نقاط الانكسار
   for (let i = 0; i < points.length; i++) {
-    // نقاط البداية والنهاية أكبر قليلاً
     const sphereRadius = (i === 0 || i === points.length - 1) ? 6 : 5;
     
     const sphereGeo = new THREE.SphereGeometry(sphereRadius, 24, 24);
@@ -411,6 +420,7 @@ function createStraightPath(points) {
     
     sphere.userData = {
       type: currentPathType,
+      points: [points[i].clone()],
       isJoint: true,
       pointIndex: i
     };
@@ -422,489 +432,315 @@ function createStraightPath(points) {
   console.log(`✅ تم إنشاء مسار مستقيم بـ ${points.length-1} أجزاء و ${points.length} نقاط`);
 }
 
-// طريقة بديلة: خطوط رفيعة مع كرات (إذا أردت نمط آخر)
-function createLineWithJoints(points) {
+// ======================
+// نظام تصدير الصور البانورامية 360 درجة
+// ======================
+
+// إعداد Canvas للتصدير
+function setupExportCanvas() {
+  exportCanvas = document.createElement('canvas');
+  exportCanvas.width = 4096; // دقة عالية للبانوراما
+  exportCanvas.height = 2048; // نسبة 2:1 للصور البانورامية
+  exportContext = exportCanvas.getContext('2d');
+  console.log('✅ Canvas التصدير جاهز');
+}
+
+// دالة تحويل الإحداثيات ثلاثية الأبعاد إلى إحداثيات النسيج
+function projectToUV(point) {
+  // تطبيع النقطة إلى سطح الكرة
+  const normalized = point.clone().normalize();
+  
+  // تحويل إلى إحداثيات كروية
+  const theta = Math.acos(normalized.y); // زاوية الانحدار (0 to PI)
+  let phi = Math.atan2(normalized.z, normalized.x); // زاوية الدوران (-PI to PI)
+  
+  // تصحيح اتجاه الصورة (لأن الصورة معكوسة أفقياً)
+  phi = -phi;
+  
+  // تحويل إلى UV (0 to 1)
+  let u = (phi + Math.PI) / (2 * Math.PI);
+  const v = theta / Math.PI;
+  
+  // التأكد من أن u في النطاق 0-1
+  u = (u + 1) % 1;
+  
+  return { u, v };
+}
+
+// دالة رسم المسار على القماش
+function drawPathOnCanvas(ctx, points, color, width = 4) {
   if (points.length < 2) return;
   
-  const color = pathColors[currentPathType];
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   
-  // إنشاء خط رفيع بين النقاط
-  const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-  const lineMat = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
-  const line = new THREE.Line(lineGeo, lineMat);
-  scene.add(line);
-  paths.push(line);
+  // تحويل جميع النقاط إلى UV
+  const uvPoints = points.map(p => projectToUV(p));
   
-  // إضافة كرات كبيرة عند النقاط
-  points.forEach((point, index) => {
-    const sphereGeo = new THREE.SphereGeometry(index === 0 || index === points.length-1 ? 7 : 5, 24, 24);
-    const sphereMat = new THREE.MeshStandardMaterial({
-      color: color,
-      emissive: color,
-      emissiveIntensity: 0.4
-    });
-    const sphere = new THREE.Mesh(sphereGeo, sphereMat);
-    sphere.position.copy(point);
-    scene.add(sphere);
-    paths.push(sphere);
-  });
-}
-
-// ======================
-// أحداث لوحة المفاتيح
-// ======================
-function onKeyDown(e) {
-  if (!drawMode) return;
+  // رسم الخطوط مع التعامل مع حافة الصورة
+  ctx.beginPath();
   
-  switch(e.key) {
-    case 'Enter':
-      e.preventDefault();
-      saveCurrentPath();
-      break;
+  for (let i = 0; i < uvPoints.length - 1; i++) {
+    const p1 = uvPoints[i];
+    const p2 = uvPoints[i + 1];
+    
+    const x1 = p1.u * exportCanvas.width;
+    const y1 = p1.v * exportCanvas.height;
+    const x2 = p2.u * exportCanvas.width;
+    const y2 = p2.v * exportCanvas.height;
+    
+    // التحقق من عبور الحافة
+    if (Math.abs(x2 - x1) > exportCanvas.width / 2) {
+      // الخط يعبر الحافة - نرسم جزئين
+      ctx.stroke();
+      ctx.beginPath();
       
-    case 'Backspace':
-      e.preventDefault();
-      if (selectedPoints.length > 0) {
-        selectedPoints.pop();
+      if (x1 < exportCanvas.width / 2) {
+        // الجزء الأول: من x1 إلى الحافة اليمنى
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(exportCanvas.width, y1);
+        ctx.stroke();
         
-        if (pointMarkers.length > 0) {
-          const lastMarker = pointMarkers.pop();
-          scene.remove(lastMarker);
-        }
+        // الجزء الثاني: من الحافة اليسرى إلى x2
+        ctx.beginPath();
+        ctx.moveTo(0, y2);
+        ctx.lineTo(x2, y2);
+      } else {
+        // الجزء الأول: من x1 إلى الحافة اليسرى
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(0, y1);
+        ctx.stroke();
         
-        updateTempLine();
-        console.log('⏪ تم حذف آخر نقطة');
+        // الجزء الثاني: من الحافة اليمنى إلى x2
+        ctx.beginPath();
+        ctx.moveTo(exportCanvas.width, y2);
+        ctx.lineTo(x2, y2);
       }
-      break;
-      
-    case 'Escape':
-      e.preventDefault();
-      clearCurrentDrawing();
-      console.log('🗑️ تم إلغاء الرسم');
-      break;
-      
-    case 'n':
-    case 'N':
-      e.preventDefault();
-      clearCurrentDrawing();
-      console.log('🆕 بدء مسار جديد');
-      break;
-      
-    case '1': currentPathType = 'EL'; console.log('🎨 نوع: EL'); break;
-    case '2': currentPathType = 'AC'; console.log('🎨 نوع: AC'); break;
-    case '3': currentPathType = 'WP'; console.log('🎨 نوع: WP'); break;
-    case '4': currentPathType = 'WA'; console.log('🎨 نوع: WA'); break;
-    case '5': currentPathType = 'GS'; console.log('🎨 نوع: GS'); break;
-  }
-}
-
-// ======================
-// إعداد الأحداث
-// ======================
-function setupEvents() {
-  // أحداث الماوس على renderer
-  renderer.domElement.addEventListener('click', onClick);
-  renderer.domElement.addEventListener('mousemove', onMouseMove);
-  
-  // أحداث لوحة المفاتيح
-  window.addEventListener('keydown', onKeyDown);
-  
-  // تغيير الحجم
-  window.addEventListener('resize', onResize);
-  
-  // أزرار التحكم
-  document.getElementById('toggleRotate').onclick = () => {
-    autorotate = !autorotate;
-    controls.autoRotate = autorotate;
-    document.getElementById('toggleRotate').textContent = 
-      autorotate ? '⏸️ إيقاف التدوير' : '▶️ تشغيل التدوير';
-  };
-
-  document.getElementById('toggleDraw').onclick = () => {
-    drawMode = !drawMode;
-    const btn = document.getElementById('toggleDraw');
-    
-    if (drawMode) {
-      btn.textContent = '⛔ إيقاف الرسم';
-      btn.style.background = '#aa3333';
-      document.body.style.cursor = 'crosshair';
-      if (markerPreview) markerPreview.visible = true;
-      controls.autoRotate = false;
     } else {
-      btn.textContent = '✏️ تفعيل الرسم';
-      btn.style.background = 'rgba(20, 30, 40, 0.9)';
-      document.body.style.cursor = 'default';
-      if (markerPreview) markerPreview.visible = false;
-      controls.autoRotate = autorotate;
-      clearCurrentDrawing();
+      // خط عادي
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
     }
-  };
-
-  // زر تثبيت المسار
-  const finalizeBtn = document.createElement('button');
-  finalizeBtn.textContent = '💾 تثبيت المسار';
-  finalizeBtn.style.position = 'absolute';
-  finalizeBtn.style.bottom = '25px';
-  finalizeBtn.style.left = '400px';
-  finalizeBtn.style.padding = '12px 24px';
-  finalizeBtn.style.zIndex = '100';
-  finalizeBtn.style.borderRadius = '40px';
-  finalizeBtn.style.background = '#228822';
-  finalizeBtn.style.color = 'white';
-  finalizeBtn.style.fontWeight = 'bold';
-  finalizeBtn.style.border = 'none';
-  finalizeBtn.style.cursor = 'pointer';
-  finalizeBtn.style.fontSize = '16px';
-  document.body.appendChild(finalizeBtn);
-
-  finalizeBtn.onclick = () => saveCurrentPath();
-  
-  // زر مسح الكل
-  const clearBtn = document.createElement('button');
-  clearBtn.textContent = '🗑️ مسح الكل';
-  clearBtn.style.position = 'absolute';
-  clearBtn.style.bottom = '25px';
-  clearBtn.style.left = '600px';
-  clearBtn.style.padding = '12px 24px';
-  clearBtn.style.zIndex = '100';
-  clearBtn.style.borderRadius = '40px';
-  clearBtn.style.background = '#882222';
-  clearBtn.style.color = 'white';
-  clearBtn.style.fontWeight = 'bold';
-  clearBtn.style.border = 'none';
-  clearBtn.style.cursor = 'pointer';
-  clearBtn.style.fontSize = '16px';
-  document.body.appendChild(clearBtn);
-
-  clearBtn.onclick = () => {
-    paths.forEach(path => scene.remove(path));
-    paths = [];
-    clearCurrentDrawing();
-    console.log('🗑️ تم مسح جميع المسارات');
-  };
-}
-
-// ======================
-// تغيير الحجم
-// ======================
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// ======================
-// الرسوم المتحركة
-// ======================
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-// ======================
-// دوال تصدير الصور
-// ======================
-
-// إنشاء أزرار التصدير
-function addExportButtons() {
-  // زر تصدير مع المسارات
-  const exportWithPathsBtn = document.createElement('button');
-  exportWithPathsBtn.textContent = '📸 تصدير مع المسارات';
-  exportWithPathsBtn.style.position = 'absolute';
-  exportWithPathsBtn.style.bottom = '25px';
-  exportWithPathsBtn.style.left = '820px';
-  exportWithPathsBtn.style.padding = '12px 24px';
-  exportWithPathsBtn.style.zIndex = '100';
-  exportWithPathsBtn.style.borderRadius = '40px';
-  exportWithPathsBtn.style.background = '#8844aa';
-  exportWithPathsBtn.style.color = 'white';
-  exportWithPathsBtn.style.fontWeight = 'bold';
-  exportWithPathsBtn.style.border = '2px solid #aa88ff';
-  exportWithPathsBtn.style.cursor = 'pointer';
-  exportWithPathsBtn.style.fontSize = '16px';
-  document.body.appendChild(exportWithPathsBtn);
-
-  // زر تصدير بدون مسارات
-  const exportWithoutPathsBtn = document.createElement('button');
-  exportWithoutPathsBtn.textContent = '🖼️ تصدير بدون مسارات';
-  exportWithoutPathsBtn.style.position = 'absolute';
-  exportWithoutPathsBtn.style.bottom = '25px';
-  exportWithoutPathsBtn.style.left = '1040px';
-  exportWithoutPathsBtn.style.padding = '12px 24px';
-  exportWithoutPathsBtn.style.zIndex = '100';
-  exportWithoutPathsBtn.style.borderRadius = '40px';
-  exportWithoutPathsBtn.style.background = '#448844';
-  exportWithoutPathsBtn.style.color = 'white';
-  exportWithoutPathsBtn.style.fontWeight = 'bold';
-  exportWithoutPathsBtn.style.border = '2px solid #88ff88';
-  exportWithoutPathsBtn.style.cursor = 'pointer';
-  exportWithoutPathsBtn.style.fontSize = '16px';
-  document.body.appendChild(exportWithoutPathsBtn);
-
-  // أحداث الأزرار
-  exportWithPathsBtn.onclick = () => exportImage(true);
-  exportWithoutPathsBtn.onclick = () => exportImage(false);
-}
-
-// دالة التصدير الرئيسية
-function exportImage(includePaths) {
-  console.log(`📸 جاري تصدير الصورة ${includePaths ? 'مع' : 'بدون'} المسارات...`);
-  
-  // إيقاف التدوير مؤقتاً
-  const wasRotating = autorotate;
-  if (wasRotating) {
-    autorotate = false;
-    controls.autoRotate = false;
   }
   
-  // إخفاء عناصر الواجهة مؤقتاً
-  const elementsToHide = [
-    document.getElementById('toggleRotate'),
-    document.getElementById('toggleDraw'),
-    document.getElementById('finalizeBtn'),
-    document.getElementById('clearBtn'),
-    document.querySelector('.hint'),
-    document.querySelector('.status-bar'),
-    document.querySelector('.color-panel')
-  ];
+  ctx.stroke();
   
-  // إضافة المراجع للأزرار الجديدة
-  const exportBtns = document.querySelectorAll('button[style*="8844aa"], button[style*="448844"]');
-  
-  // حفظ حالة الرؤية وإخفاء العناصر
-  const hiddenElements = [];
-  
-  elementsToHide.forEach(el => {
-    if (el && el.style) {
-      hiddenElements.push({ el, display: el.style.display });
-      el.style.display = 'none';
-    }
+  // رسم النقاط
+  uvPoints.forEach((uv, index) => {
+    const x = uv.u * exportCanvas.width;
+    const y = uv.v * exportCanvas.height;
+    
+    // حجم النقطة حسب موقعها
+    const radius = (index === 0 || index === uvPoints.length - 1) ? width * 2.5 : width * 2;
+    
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // حدود بيضاء للنقاط
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   });
   
-  exportBtns.forEach(btn => {
-    if (btn && btn.style) {
-      hiddenElements.push({ el: btn, display: btn.style.display });
-      btn.style.display = 'none';
-    }
-  });
+  ctx.restore();
+}
+
+// دالة تصدير البانوراما 360
+function exportPanorama(includePaths = true) {
+  if (isExporting) {
+    console.log('⏳ جاري التصدير بالفعل...');
+    return;
+  }
   
-  // إخفاء المعاينة المؤقتة
-  if (markerPreview) markerPreview.visible = false;
+  if (!sphereMesh || !sphereMesh.material || !sphereMesh.material.map) {
+    alert('❌ الصورة البانورامية غير متوفرة');
+    return;
+  }
   
-  // إذا كنا نريد تصدير بدون مسارات، نخفي المسارات مؤقتاً
-  const pathsVisibility = [];
-  if (!includePaths) {
+  isExporting = true;
+  
+  console.log(`🔄 جاري تصدير البانوراما 360 ${includePaths ? 'مع' : 'بدون'} المسارات...`);
+  
+  // الحصول على النسيج الأصلي
+  const texture = sphereMesh.material.map;
+  const image = texture.image;
+  
+  // رسم الصورة الأصلية على القماش
+  exportContext.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
+  exportContext.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
+  
+  // إذا أردنا إضافة المسارات
+  if (includePaths) {
+    // رسم جميع المسارات المحفوظة
     paths.forEach(path => {
-      pathsVisibility.push({ path, visible: path.visible });
-      path.visible = false;
+      if (path.userData && path.userData.points && path.userData.points.length > 0) {
+        const points = path.userData.points;
+        const color = pathColors[path.userData.type] || 0xffcc00;
+        const colorStr = '#' + color.toString(16).padStart(6, '0');
+        
+        drawPathOnCanvas(exportContext, points, colorStr, 4);
+      }
     });
     
-    // أيضاً نخفي العلامات والنقاط
-    pointMarkers.forEach(marker => {
-      pathsVisibility.push({ path: marker, visible: marker.visible });
-      marker.visible = false;
-    });
-    
-    if (tempLine) {
-      pathsVisibility.push({ path: tempLine, visible: tempLine.visible });
-      tempLine.visible = false;
+    // رسم المسار الحالي إذا كان موجوداً
+    if (selectedPoints.length > 0) {
+      const colorStr = '#' + pathColors[currentPathType].toString(16).padStart(6, '0');
+      drawPathOnCanvas(exportContext, selectedPoints, colorStr, 3);
     }
   }
   
-  // انتظار تحديث المشهد
-  setTimeout(() => {
-    try {
-      // التقاط الصورة
-      renderer.render(scene, camera);
+  // تصدير الصورة
+  try {
+    // تحويل القماش إلى صورة
+    const dataURL = exportCanvas.toDataURL('image/png');
+    
+    // إنشاء رابط التحميل
+    const link = document.createElement('a');
+    link.download = `panorama-360-${includePaths ? 'with-paths' : 'without-paths'}-${Date.now()}.png`;
+    link.href = dataURL;
+    link.click();
+    
+    console.log('✅ تم تصدير البانوراما 360 بنجاح');
+    
+  } catch (error) {
+    console.error('❌ خطأ في تصدير البانوراما:', error);
+    alert('حدث خطأ في تصدير الصورة');
+  }
+  
+  isExporting = false;
+}
+
+// دالة تصدير بيانات المسارات لـ Marzipano
+function exportMarzipanoData() {
+  if (!sphereMesh || !sphereMesh.material || !sphereMesh.material.map) {
+    alert('❌ الصورة البانورامية غير متوفرة');
+    return;
+  }
+  
+  console.log('🎯 تحضير بيانات Marzipano...');
+  
+  // تجميع بيانات المسارات
+  const pathsData = [];
+  
+  paths.forEach(path => {
+    if (path.userData && path.userData.points && path.userData.points.length > 0) {
+      const points = path.userData.points;
       
-      // الحصول على بيانات الصورة
-      const canvas = renderer.domElement;
-      const dataURL = canvas.toDataURL('image/png');
-      
-      // إنشاء رابط التحميل
-      const link = document.createElement('a');
-      link.download = `bim-tour-${includePaths ? 'with-paths' : 'without-paths'}-${Date.now()}.png`;
-      link.href = dataURL;
-      link.click();
-      
-      console.log('✅ تم تصدير الصورة بنجاح');
-      
-    } catch (error) {
-      console.error('❌ خطأ في تصدير الصورة:', error);
-      alert('حدث خطأ في تصدير الصورة');
-      
-    } finally {
-      // إعادة العناصر المخفية
-      hiddenElements.forEach(item => {
-        if (item.el) item.el.style.display = item.display || '';
+      // تحويل النقاط إلى إحداثيات UV
+      const uvPoints = points.map(p => {
+        const uv = projectToUV(p);
+        return [uv.u, uv.v];
       });
       
-      // إعادة المسارات المخفية
-      if (!includePaths) {
-        pathsVisibility.forEach(item => {
-          if (item.path) item.path.visible = item.visible;
-        });
-      }
-      
-      // إعادة المعاينة
-      if (markerPreview && drawMode) markerPreview.visible = true;
-      
-      // إعادة التدوير
-      if (wasRotating) {
-        autorotate = true;
-        controls.autoRotate = true;
-      }
-      
-      // إعادة الرسم
-      renderer.render(scene, camera);
+      pathsData.push({
+        type: path.userData.type,
+        color: '#' + pathColors[path.userData.type].toString(16).padStart(6, '0'),
+        points: uvPoints
+      });
     }
-  }, 100);
-}
-
-// ======================
-// دالة تصدير متقدمة مع خيارات
-// ======================
-function showExportDialog() {
-  // إنشاء نافذة حوار مخصصة
-  const dialog = document.createElement('div');
-  dialog.style.position = 'fixed';
-  dialog.style.top = '50%';
-  dialog.style.left = '50%';
-  dialog.style.transform = 'translate(-50%, -50%)';
-  dialog.style.background = 'rgba(20, 30, 40, 0.95)';
-  dialog.style.color = 'white';
-  dialog.style.padding = '30px';
-  dialog.style.borderRadius = '20px';
-  dialog.style.zIndex = '1000';
-  dialog.style.border = '3px solid #4a6c8f';
-  dialog.style.backdropFilter = 'blur(10px)';
-  dialog.style.boxShadow = '0 10px 40px rgba(0,0,0,0.8)';
-  dialog.style.minWidth = '400px';
+  });
   
-  dialog.innerHTML = `
-    <h2 style="margin-top:0; color:#88aaff; text-align:center;">📸 تصدير الصورة</h2>
+  // إضافة المسار الحالي إذا كان موجوداً
+  if (selectedPoints.length > 0) {
+    const uvPoints = selectedPoints.map(p => {
+      const uv = projectToUV(p);
+      return [uv.u, uv.v];
+    });
     
-    <div style="margin:20px 0;">
-      <label style="display:block; margin-bottom:10px;">
-        <input type="radio" name="exportType" value="withPaths" checked> 
-        <span style="font-size:18px;">تصدير مع المسارات</span>
-      </label>
-      
-      <label style="display:block; margin:10px 0;">
-        <input type="radio" name="exportType" value="withoutPaths"> 
-        <span style="font-size:18px;">تصدير بدون مسارات</span>
-      </label>
-      
-      <label style="display:block; margin:10px 0;">
-        <input type="radio" name="exportType" value="both"> 
-        <span style="font-size:18px;">تصدير الاثنين معاً</span>
-      </label>
-    </div>
-    
-    <div style="margin:20px 0;">
-      <label style="display:block; margin-bottom:5px;">جودة الصورة:</label>
-      <select id="imageQuality" style="width:100%; padding:8px; border-radius:5px;">
-        <option value="1">عالية (PNG)</option>
-        <option value="0.8">متوسطة (JPEG)</option>
-        <option value="0.5">منخفضة (JPEG)</option>
-      </select>
-    </div>
-    
-    <div style="display:flex; gap:10px; justify-content:center; margin-top:30px;">
-      <button id="exportConfirm" style="padding:12px 30px; background:#228822; color:white; border:none; border-radius:30px; cursor:pointer; font-weight:bold;">تصدير</button>
-      <button id="exportCancel" style="padding:12px 30px; background:#882222; color:white; border:none; border-radius:30px; cursor:pointer; font-weight:bold;">إلغاء</button>
-    </div>
-  `;
+    pathsData.push({
+      type: currentPathType,
+      color: '#' + pathColors[currentPathType].toString(16).padStart(6, '0'),
+      points: uvPoints,
+      isTemporary: true
+    });
+  }
   
-  document.body.appendChild(dialog);
-  
-  // أحداث الأزرار
-  document.getElementById('exportConfirm').onclick = () => {
-    const type = document.querySelector('input[name="exportType"]:checked').value;
-    const quality = document.getElementById('imageQuality').value;
-    
-    if (type === 'both') {
-      exportImage(true);
-      setTimeout(() => exportImage(false), 500);
-    } else {
-      exportImage(type === 'withPaths');
-    }
-    
-    document.body.removeChild(dialog);
-  };
-  
-  document.getElementById('exportCancel').onclick = () => {
-    document.body.removeChild(dialog);
-  };
-}
-
-// ======================
-// دالة تصدير متوافقة مع Marzipano
-// ======================
-function exportForMarzipano() {
-  console.log('🎯 تصدير متوافق مع Marzipano');
-  
-  // الحصول على إحداثيات الكاميرا الحالية
-  const cameraPos = camera.position.clone();
-  const cameraTarget = controls.target.clone();
-  
-  // حفظ الإعدادات
-  const exportData = {
+  // إنشاء ملف البيانات
+  const marzipanoData = {
+    version: "1.0",
     timestamp: Date.now(),
-    camera: {
-      position: [cameraPos.x, cameraPos.y, cameraPos.z],
-      target: [cameraTarget.x, cameraTarget.y, cameraTarget.z]
-    },
-    paths: paths.map(path => {
-      if (path.userData && path.userData.points) {
-        return {
-          type: path.userData.type,
-          points: path.userData.points.map(p => [p.x, p.y, p.z])
-        };
-      }
-      return null;
-    }).filter(p => p),
-    settings: {
-      imageWidth: renderer.domElement.width,
-      imageHeight: renderer.domElement.height
-    }
+    imageSize: [exportCanvas.width, exportCanvas.height],
+    paths: pathsData
   };
   
-  // تصدير كملف JSON مع الصورة
-  const jsonStr = JSON.stringify(exportData, null, 2);
+  const jsonStr = JSON.stringify(marzipanoData, null, 2);
   const jsonBlob = new Blob([jsonStr], { type: 'application/json' });
   const jsonUrl = URL.createObjectURL(jsonBlob);
   
   const jsonLink = document.createElement('a');
-  jsonLink.download = `marzipano-data-${Date.now()}.json`;
+  jsonLink.download = `marzipano-paths-${Date.now()}.json`;
   jsonLink.href = jsonUrl;
   jsonLink.click();
-  
-  // تصدير الصورة
-  exportImage(true);
   
   console.log('✅ تم تصدير بيانات Marzipano');
 }
 
-// أضف هذا السطر في دالة setupEvents بعد إنشاء الأزرار الأخرى
-addExportButtons();
+// دالة تصدير كاملة (صورة + بيانات)
+function exportComplete() {
+  // تصدير الصورة مع المسارات
+  exportPanorama(true);
+  
+  // تصدير البيانات بعد قليل
+  setTimeout(() => {
+    exportMarzipanoData();
+  }, 500);
+}
 
-// أضف زر تصدير متقدم
-const advancedExportBtn = document.createElement('button');
-advancedExportBtn.textContent = '🎯 تصدير متقدم';
-advancedExportBtn.style.position = 'absolute';
-advancedExportBtn.style.bottom = '25px';
-advancedExportBtn.style.left = '1260px';
-advancedExportBtn.style.padding = '12px 24px';
-advancedExportBtn.style.zIndex = '100';
-advancedExportBtn.style.borderRadius = '40px';
-advancedExportBtn.style.background = '#aa44aa';
-advancedExportBtn.style.color = 'white';
-advancedExportBtn.style.fontWeight = 'bold';
-advancedExportBtn.style.border = '2px solid #ff88ff';
-advancedExportBtn.style.cursor = 'pointer';
-advancedExportBtn.style.fontSize = '16px';
-document.body.appendChild(advancedExportBtn);
-
-advancedExportBtn.onclick = showExportDialog;
+// إنشاء أزرار التصدير
+function addExportButtons() {
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.position = 'absolute';
+  buttonContainer.style.bottom = '100px';
+  buttonContainer.style.right = '25px';
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.flexDirection = 'column';
+  buttonContainer.style.gap = '10px';
+  buttonContainer.style.zIndex = '1000';
+  buttonContainer.style.background = 'rgba(0, 0, 0, 0.8)';
+  buttonContainer.style.padding = '15px';
+  buttonContainer.style.borderRadius = '20px';
+  buttonContainer.style.border = '2px solid #4a6c8f';
+  buttonContainer.style.backdropFilter = 'blur(10px)';
+  
+  const buttons = [
+    {
+      text: '🌐 تصدير بانوراما مع المسارات',
+      bg: '#8844aa',
+      border: '#cc88ff',
+      action: () => exportPanorama(true)
+    },
+    {
+      text: '🌅 تصدير بانوراما بدون مسارات',
+      bg: '#448844',
+      border: '#88ff88',
+      action: () => exportPanorama(false)
+    },
+    {
+      text: '📊 تصدير بيانات Marzipano',
+      bg: '#aa44aa',
+      border: '#ff88ff',
+      action: exportMarzipanoData
+    },
+    {
+      text: '📦 تصدير كامل (صورة + بيانات)',
+      bg: '#ff8844',
+      border: '#ffaa88',
+      action: exportComplete
+    }
+  ];
+  
+  buttons.forEach(btn => {
+    const button = document.createElement('button');
+    button.textContent = btn.text;
+    button.style.padding = '12px 24px';
+    button.style.background = btn.bg;
+    button.style.color = 'white';
+    button.style.border = `2px solid ${btn.border}`;
+    button.style.borderRadius = '40px';
+    button.style.cursor = 'pointer';
+    button.style.fontWeig
