@@ -11,7 +11,7 @@ let sphereMesh = null;
 let selectedPoints = [];
 let previewLine = null;
 let pipes = [];
-
+let drawMode = false; // ⛔ افتراضياً لا نرسم
 // نوع الأنبوب الحالي (يمكنك تغييره لاحقًا بحرية)
 let currentPipeType = {
   radius: 0.6,
@@ -85,10 +85,9 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
 window.addEventListener('click', onClick);
-
 function onClick(event) {
+  if (!drawMode) return; // ⛔ لا ترسم إلا إذا كنت في وضع الرسم
   if (!sphereMesh) return;
-
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
