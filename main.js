@@ -98,22 +98,21 @@ const mouse = new THREE.Vector2();
 
 window.addEventListener('click', onClick);
 function onClick(event) {
-  if (!drawMode) return; // ⛔ لا ترسم إلا إذا كنت في وضع الرسم
   if (!sphereMesh) return;
+
+  if (!drawMode) return; // ❌ إذا لم يكن في وضع الرسم لا نفعل شيء
+
   mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(sphereMesh);
 
+  const intersects = raycaster.intersectObject(sphereMesh);
   if (intersects.length > 0) {
     const point = intersects[0].point.clone();
     selectedPoints.push(point);
     drawPreviewPath();
-    console.log('🟢 نقطة مضافة:', point);
   }
 }
-
 // ==================== Preview Line ====================
 function drawPreviewPath() {
   if (previewLine) {
