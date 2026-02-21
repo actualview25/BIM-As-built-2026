@@ -461,6 +461,7 @@ function drawPathOnImage(ctx, points, color, width = 4) {
 }
 
 // دالة التصدير الرئيسية
+// دالة التصدير الرئيسية (محدثة)
 function exportForMarzipano() {
   if (isExporting) {
     console.log('⏳ جاري التصدير بالفعل...');
@@ -474,7 +475,6 @@ function exportForMarzipano() {
 
   isExporting = true;
   console.log('🎯 بدء تصدير حزمة Marzipano المتكاملة...');
-  console.log(`📊 عدد المسارات المراد تصديرها: ${paths.length}`);
 
   // 1. الحصول على الصورة الأصلية
   const texture = sphereMesh.material.map;
@@ -482,31 +482,66 @@ function exportForMarzipano() {
 
   // 2. إنشاء مجلد وهمي للتصدير
   const timestamp = Date.now();
+  const date = new Date().toISOString();
 
-  // 3. تجميع بيانات المسارات
+  // 3. تجميع المسارات بشكل صحيح
   const pathsData = [];
+  let pathId = 1;
+  
+  // تجميع النقاط لكل مسار
+  const pathGroups = [];
+  let currentPath = [];
   
   paths.forEach(path => {
     if (path.userData && path.userData.points && path.userData.points.length > 0) {
       const points = path.userData.points;
       
-      // تحويل كل نقطة إلى yaw/pitch
-      const coordinates = points.map(p => {
-        const { yaw, pitch } = pointToYawPitch(p);
-        return [yaw, pitch];
-      });
+      // إذا كان هذا الجزء من مسار مستمر
+      if (currentPath.length > 0) {
+        // تحقق إذا كانت آخر نقطة في المسار الحالي قريبة من أول نقطة في هذا الجزء
+        const lastPoint = currentPath[currentPath.length - 1];
+        const firstPoint = points[0];
+        const distance = lastPoint.distanceTo(firstPoint);
+        
+        if (distance < 10) {
+          // نفس المسار - أضف النقاط
+          points.forEach(p => currentPath.push(p));
+        } else {
+          // مسار جديد - احفظ القديم وابدأ جديد
+          if (currentPath.length > 0) {
+            pathGroups.push([...currentPath]);
+          }
+          currentPath = [...points];
+        }
+      } else {
+        currentPath = [...points];
+      }
+    }
+  });
+  
+  // أضف آخر مسار
+  if (currentPath.length > 0) {
+    pathGroups.push([...currentPath]);
+  }
 
-      pathsData.push({
-        type: path.userData.type,
-        color: '#' + pathColors[path.userData.type].toString(16).padStart(6, '0'),
-        points: coordinates
+  // تحويل كل مجموعة مسار إلى تنسيق Marzipano
+  pathGroups.forEach(group => {
+    if (group.length >= 2) {
+      const points = group.map(p => {
+        const { yaw, pitch } = pointToYawPitch(p);
+        return { yaw, pitch };
       });
       
-      console.log(`🎨 تم تجميع مسار نوع ${path.userData.type} بعدد نقاط ${points.length}`);
+      pathsData.push({
+        id: `path-${pathId++}`,
+        type: currentPathType, // قد تحتاج لتخزين نوع المسار في userData
+        color: '#' + pathColors[currentPathType].toString(16).padStart(6, '0'),
+        points: points
+      });
     }
   });
 
-  // 4. إنشاء ملف JSON
+  // 4. إنشاء ملف JSON بالصيغة الصحيحة
   const marzipanoData = {
     version: "1.0",
     timestamp: timestamp,
@@ -519,10 +554,8 @@ function exportForMarzipano() {
     paths: pathsData,
     metadata: {
       totalPaths: pathsData.length,
-      types: Object.keys(pathColors).map(key => ({
-        type: key,
-        color: '#' + pathColors[key].toString(16).padStart(6, '0')
-      }))
+      scene: "BIM Virtual Tour",
+      created: date
     }
   };
 
@@ -530,12 +563,11 @@ function exportForMarzipano() {
   exportContext.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
   exportContext.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
   
-  // رسم جميع المسارات
-  paths.forEach(path => {
-    if (path.userData && path.userData.points && path.userData.points.length > 0) {
-      const points = path.userData.points;
-      const color = '#' + pathColors[path.userData.type].toString(16).padStart(6, '0');
-      drawPathOnImage(exportContext, points, color, 4);
+  // رسم المسارات
+  pathGroups.forEach((group, index) => {
+    if (group.length >= 2) {
+      const color = pathsData[index].color;
+      drawPathOnImage(exportContext, group, color, 4);
     }
   });
 
@@ -544,21 +576,9 @@ function exportForMarzipano() {
     // تصدير الصورة مع المسارات
     const imageDataURL = exportCanvas.toDataURL('image/jpeg', 0.95);
     const imageLink = document.createElement('a');
-    imageLink.download = `panorama-with-paths-${timestamp}.jpg`;
+    imageLink.download = `panorama-${timestamp}.jpg`;
     imageLink.href = imageDataURL;
     imageLink.click();
-
-    // تصدير الصورة بدون مسارات
-    setTimeout(() => {
-      exportContext.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
-      exportContext.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
-      
-      const imageDataURL2 = exportCanvas.toDataURL('image/jpeg', 0.95);
-      const imageLink2 = document.createElement('a');
-      imageLink2.download = `panorama-without-paths-${timestamp}.jpg`;
-      imageLink2.href = imageDataURL2;
-      imageLink2.click();
-    }, 500);
 
     // تصدير ملف JSON
     setTimeout(() => {
@@ -572,8 +592,8 @@ function exportForMarzipano() {
       jsonLink.click();
       
       console.log('✅ تم تصدير كل الملفات بنجاح');
-      alert(`✅ تم التصدير بنجاح!\n📸 صورتان (مع وبدون مسارات)\n📊 ملف بيانات JSON`);
-    }, 1000);
+      alert(`✅ تم التصدير بنجاح!\n📸 الصورة: panorama-${timestamp}.jpg\n📊 الملفات: ${pathsData.length} مسار`);
+    }, 500);
 
   } catch (error) {
     console.error('❌ خطأ في التصدير:', error);
@@ -582,7 +602,6 @@ function exportForMarzipano() {
 
   isExporting = false;
 }
-
 // ======================
 // أحداث لوحة المفاتيح
 // ======================
