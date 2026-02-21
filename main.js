@@ -692,37 +692,15 @@ function setupEvents() {
 
   exportBtn.onclick = exportForMarzipano;
 }
-
-// ======================
 // تغيير الحجم
-// ======================
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
-
-// ======================
 // الرسوم المتحركة
-// ======================
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
   renderer.render(scene, camera);
-}
-```
-
-ملف style.css (أضف هذا السطر في النهاية):
-
-```css
-/* زر تصدير Marzipano */
-#exportMarzipanoBtn {
-  background: linear-gradient(135deg, #8844aa, #aa66cc) !important;
-  border-color: #cc88ff !important;
-  box-shadow: 0 4px 15px rgba(136, 68, 170, 0.5);
-}
-
-#exportMarzipanoBtn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(136, 68, 170, 0.7);
 }
