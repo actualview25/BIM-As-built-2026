@@ -36,7 +36,6 @@ window.setCurrentPathType = (t) => {
     markerPreview.material.emissive.setHex(pathColors[currentPathType]);
   }
   
-  // تحديث شريط الحالة
   const statusSpan = document.querySelector('#status span');
   if (statusSpan) {
     statusSpan.style.color = '#' + pathColors[t].toString(16).padStart(6, '0');
@@ -45,7 +44,7 @@ window.setCurrentPathType = (t) => {
 };
 
 // =======================================
-// تهيئة المشهد والكاميرا
+// تهيئة المشهد
 // =======================================
 init();
 
@@ -122,7 +121,10 @@ function loadPanorama() {
       if (loaderEl) loaderEl.style.display = 'none';
       
       setupMarkerPreview();
-      addDemoPath();
+      
+      // إضافة مسار تجريبي بسيط (اختياري)
+      // يمكنك تعطيله إذا لم ترد
+      // addDemoPath();
     },
     (progress) => {
       console.log(`⏳ التحميل: ${Math.round((progress.loaded / progress.total) * 100)}%`);
@@ -150,7 +152,6 @@ function createTestSphere() {
   
   document.getElementById('loader').style.display = 'none';
   setupMarkerPreview();
-  addDemoPath();
 }
 
 // =======================================
@@ -170,9 +171,14 @@ function setupMarkerPreview() {
 }
 
 // =======================================
-// مسار تجريبي
+// مسار تجريبي (معطل - يمكنك تفعيله إذا أردت)
 // =======================================
 function addDemoPath() {
+  // هذه الدالة معطلة لمنع المسار العشوائي
+  console.log('⚠️ المسار التجريبي معطل');
+  return;
+  
+  /* الكود القديم - معطل
   setTimeout(() => {
     const points = [];
     const radius = 400;
@@ -191,6 +197,7 @@ function addDemoPath() {
       saveCurrentPath();
     }, 2000);
   }, 2000);
+  */
 }
 
 // =======================================
@@ -718,7 +725,7 @@ function setupEvents() {
 // إضافة أزرار التصدير
 // =======================================
 function addExportButtons() {
-  // إزالة أزرار التصدير القديمة إذا وجدت
+  // إزالة أزرار التصدير القديمة فقط، وليس الأزرار الرئيسية
   const oldExport = document.querySelector('.export-controls');
   if (oldExport) oldExport.remove();
 
