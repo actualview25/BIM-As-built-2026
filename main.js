@@ -462,6 +462,9 @@ function drawPathOnImage(ctx, points, color, width = 4) {
 
 // دالة التصدير الرئيسية
 // دالة التصدير الرئيسية (محدثة)
+// =======================================
+// دالة التصدير النهائية - مضبوطة بالكامل
+// =======================================
 function exportForMarzipano() {
   if (isExporting) {
     console.log('⏳ جاري التصدير بالفعل...');
@@ -479,124 +482,190 @@ function exportForMarzipano() {
   // 1. الحصول على الصورة الأصلية
   const texture = sphereMesh.material.map;
   const image = texture.image;
-
-  // 2. إنشاء مجلد وهمي للتصدير
-  const timestamp = Date.now();
-  const date = new Date().toISOString();
-
-  // 3. تجميع المسارات بشكل صحيح
-  const pathsData = [];
-  let pathId = 1;
   
-  // تجميع النقاط لكل مسار
-  const pathGroups = [];
-  let currentPath = [];
+  // 2. الحصول على الأبعاد الصحيحة من الصورة نفسها
+  const imageWidth = image.width;      // العرض الحقيقي للصورة
+  const imageHeight = image.height;    // الارتفاع الحقيقي للصورة
   
-  paths.forEach(path => {
-    if (path.userData && path.userData.points && path.userData.points.length > 0) {
-      const points = path.userData.points;
+  console.log(`📸 أبعاد الصورة الأصلية: ${imageWidth} x ${imageHeight}`);
+  
+  // 3. التأكد من أن النسبة 2:1 (مطلوبة لـ Marzipano)
+  if (Math.abs(imageWidth / imageHeight - 2) > 0.01) {
+    console.warn('⚠️ تحذير: نسبة الصورة ليست 2:1 بالضبط');
+  }
+
+  // 4. إعداد Canvas بنفس أبعاد الصورة الأصلية
+  exportCanvas.width = imageWidth;
+  exportCanvas.height = imageHeight;
+  exportContext = exportCanvas.getContext('2d');
+
+  // 5. دالة تحويل yaw/pitch إلى إحداثيات الصورة بدقة
+  function yawPitchToXY(yaw, pitch) {
+    // yaw من 0 إلى 2PI
+    // pitch من -PI/2 إلى PI/2
+    
+    const x = (yaw / (2 * Math.PI)) * imageWidth;
+    const y = (0.5 - pitch / Math.PI) * imageHeight;
+    
+    return { x, y };
+  }
+
+  // 6. رسم المسار على الصورة بدقة
+  function drawPathOnImage(ctx, points, color, type) {
+    if (points.length < 2) return;
+    
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = type === 'joint' ? 8 : 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // تحويل كل نقطة إلى إحداثيات الصورة
+    const imagePoints = points.map(p => {
+      const { yaw, pitch } = pointToYawPitch(p);
+      return yawPitchToXY(yaw, pitch);
+    });
+    
+    // رسم الخطوط
+    ctx.beginPath();
+    ctx.moveTo(imagePoints[0].x, imagePoints[0].y);
+    
+    for (let i = 1; i < imagePoints.length; i++) {
+      // التعامل مع عبور الحافة
+      const prev = imagePoints[i-1];
+      const curr = imagePoints[i];
       
-      // إذا كان هذا الجزء من مسار مستمر
-      if (currentPath.length > 0) {
-        // تحقق إذا كانت آخر نقطة في المسار الحالي قريبة من أول نقطة في هذا الجزء
-        const lastPoint = currentPath[currentPath.length - 1];
-        const firstPoint = points[0];
-        const distance = lastPoint.distanceTo(firstPoint);
+      if (Math.abs(curr.x - prev.x) > imageWidth / 2) {
+        // الخط يعبر الحافة - نرسم جزئين
+        ctx.stroke();
+        ctx.beginPath();
         
-        if (distance < 10) {
-          // نفس المسار - أضف النقاط
-          points.forEach(p => currentPath.push(p));
+        if (prev.x < imageWidth / 2) {
+          ctx.moveTo(prev.x, prev.y);
+          ctx.lineTo(imageWidth, prev.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, curr.y);
+          ctx.lineTo(curr.x, curr.y);
         } else {
-          // مسار جديد - احفظ القديم وابدأ جديد
-          if (currentPath.length > 0) {
-            pathGroups.push([...currentPath]);
-          }
-          currentPath = [...points];
+          ctx.moveTo(prev.x, prev.y);
+          ctx.lineTo(0, prev.y);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(imageWidth, curr.y);
+          ctx.lineTo(curr.x, curr.y);
         }
       } else {
-        currentPath = [...points];
+        ctx.lineTo(curr.x, curr.y);
+      }
+    }
+    ctx.stroke();
+    
+    // رسم النقاط
+    imagePoints.forEach((point, index) => {
+      const radius = (index === 0 || index === imagePoints.length - 1) ? 10 : 6;
+      
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+    
+    ctx.restore();
+  }
+
+  // 7. تجميع المسارات
+  const pathsData = [];
+  const processedPaths = new Set();
+  
+  paths.forEach(path => {
+    if (path.userData && path.userData.points && path.userData.points.length >= 2) {
+      const pathId = path.userData.pathId || `path-${Date.now()}-${Math.random()}`;
+      
+      if (!processedPaths.has(pathId)) {
+        processedPaths.add(pathId);
+        
+        const points = path.userData.points;
+        const yawPitchPoints = points.map(p => pointToYawPitch(p));
+        
+        pathsData.push({
+          id: pathId,
+          type: path.userData.type || 'EL',
+          color: '#' + (pathColors[path.userData.type] || 0xffcc00).toString(16).padStart(6, '0'),
+          points: yawPitchPoints
+        });
       }
     }
   });
-  
-  // أضف آخر مسار
-  if (currentPath.length > 0) {
-    pathGroups.push([...currentPath]);
-  }
 
-  // تحويل كل مجموعة مسار إلى تنسيق Marzipano
-  pathGroups.forEach(group => {
-    if (group.length >= 2) {
-      const points = group.map(p => {
-        const { yaw, pitch } = pointToYawPitch(p);
-        return { yaw, pitch };
-      });
-      
-      pathsData.push({
-        id: `path-${pathId++}`,
-        type: currentPathType, // قد تحتاج لتخزين نوع المسار في userData
-        color: '#' + pathColors[currentPathType].toString(16).padStart(6, '0'),
-        points: points
-      });
-    }
+  // 8. رسم كل شيء على الصورة
+  exportContext.clearRect(0, 0, imageWidth, imageHeight);
+  exportContext.drawImage(image, 0, 0, imageWidth, imageHeight);
+  
+  pathsData.forEach(path => {
+    drawPathOnImage(exportContext, 
+      path.points.map(p => new THREE.Vector3().setFromSphericalCoords(1, p.pitch, p.yaw)),
+      path.color,
+      'path'
+    );
   });
 
-  // 4. إنشاء ملف JSON بالصيغة الصحيحة
+  // 9. إنشاء ملف JSON بالصيغة الصحيحة
   const marzipanoData = {
     version: "1.0",
-    timestamp: timestamp,
+    timestamp: Date.now(),
     name: "BIM Virtual Tour Export",
     image: {
-      filename: `panorama-${timestamp}.jpg`,
-      width: exportCanvas.width,
-      height: exportCanvas.height
+      filename: `panorama-${Date.now()}.jpg`,
+      width: imageWidth,
+      height: imageHeight
     },
-    paths: pathsData,
+    paths: pathsData.map(path => ({
+      id: path.id,
+      type: path.type,
+      color: path.color,
+      points: path.points.map(p => ({
+        yaw: p.yaw,
+        pitch: p.pitch
+      }))
+    })),
     metadata: {
       totalPaths: pathsData.length,
       scene: "BIM Virtual Tour",
-      created: date
+      created: new Date().toISOString()
     }
   };
 
-  // 5. رسم المسارات على الصورة
-  exportContext.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
-  exportContext.drawImage(image, 0, 0, exportCanvas.width, exportCanvas.height);
-  
-  // رسم المسارات
-  pathGroups.forEach((group, index) => {
-    if (group.length >= 2) {
-      const color = pathsData[index].color;
-      drawPathOnImage(exportContext, group, color, 4);
-    }
-  });
-
-  // 6. تصدير كل شيء
+  // 10. تصدير الملفات
   try {
-    // تصدير الصورة مع المسارات
+    // تصدير الصورة
     const imageDataURL = exportCanvas.toDataURL('image/jpeg', 0.95);
     const imageLink = document.createElement('a');
-    imageLink.download = `panorama-${timestamp}.jpg`;
+    imageLink.download = `panorama-${Date.now()}.jpg`;
     imageLink.href = imageDataURL;
     imageLink.click();
 
-    // تصدير ملف JSON
+    // تصدير JSON
     setTimeout(() => {
       const jsonStr = JSON.stringify(marzipanoData, null, 2);
       const jsonBlob = new Blob([jsonStr], { type: 'application/json' });
       const jsonUrl = URL.createObjectURL(jsonBlob);
       
       const jsonLink = document.createElement('a');
-      jsonLink.download = `marzipano-data-${timestamp}.json`;
+      jsonLink.download = `marzipano-data-${Date.now()}.json`;
       jsonLink.href = jsonUrl;
       jsonLink.click();
       
-      console.log('✅ تم تصدير كل الملفات بنجاح');
-      alert(`✅ تم التصدير بنجاح!\n📸 الصورة: panorama-${timestamp}.jpg\n📊 الملفات: ${pathsData.length} مسار`);
+      console.log('✅ تم التصدير بنجاح');
+      alert(`✅ تم التصدير بنجاح!\n📸 الأبعاد: ${imageWidth} x ${imageHeight}\n📊 عدد المسارات: ${pathsData.length}`);
     }, 500);
 
   } catch (error) {
-    console.error('❌ خطأ في التصدير:', error);
+    console.error('❌ خطأ:', error);
     alert('حدث خطأ في التصدير');
   }
 
