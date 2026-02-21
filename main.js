@@ -728,4 +728,35 @@ function addExportButtons() {
   exportDiv.innerHTML = `
     <button id="exportWithPaths">🌐 تصدير مع المسارات</button>
     <button id="exportWithoutPaths">🌅 تصدير بدون مسارات</button>
-    <button id="exportMarzipano">📊 ت
+    <button id="exportMarzipano">📊 تصدير بيانات Marzipano</button>
+    <button id="exportComplete">📦 تصدير كامل</button>
+  `;
+  
+  document.body.appendChild(exportDiv);
+
+  // إضافة أحداث أزرار التصدير
+  document.getElementById('exportWithPaths').onclick = () => exportPanorama(true);
+  document.getElementById('exportWithoutPaths').onclick = () => exportPanorama(false);
+  document.getElementById('exportMarzipano').onclick = exportMarzipanoData;
+  document.getElementById('exportComplete').onclick = exportComplete;
+  
+  console.log('✅ أزرار التصدير تمت إضافتها');
+}
+
+// =======================================
+// تغيير الحجم
+// =======================================
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// =======================================
+// الرسوم المتحركة
+// =======================================
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
